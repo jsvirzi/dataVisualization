@@ -8,11 +8,29 @@
 #include <stdio.h>
 
 #include <math.h>
+#include <TFile.h>
+#include <TTree.h>
 
 using namespace cv;
 using namespace std;
 
 #define ESC 27
+
+void prettyGraph(TGraph *graph, float xMin, float xMax, float yMin, float yMax) {
+    float lineWidth = 2.0;
+    int markerStyle = 1;
+    graph->GetXaxis()->SetLabelOffset(999);
+    graph->GetXaxis()->SetLabelSize(0);
+    graph->GetYaxis()->SetLabelOffset(999);
+    graph->GetYaxis()->SetLabelSize(0);
+    graph->GetXaxis()->SetRangeUser(xMin, xMax);
+    graph->GetYaxis()->SetNdivisions(0, 0);
+    graph->SetMinimum(yMin);
+    graph->SetMaximum(yMax);
+    graph->SetLineColor(kBlue);
+    graph->SetLineWidth(lineWidth);
+    graph->SetMarkerStyle(markerStyle);
+}
 
 bool readFieldFromCsv(const char *line, int field, char *res, int max) {
 	int i, pos = 0, len = strlen(line), nCommas = 0, beginPos = 0, endPos = -1;
@@ -116,16 +134,16 @@ int readFloatArrayFromCsv(const char *filename, int srcId, float *x, float *y, f
 } 
 
 #define MaxImu 1000000
-float accData[3][MaxImu], gyrData[3][MaxImu], magData[3][MaxImu], tData[MaxImu];
-long accTime[MaxImu], gyrTime[MaxImu], magTime[MaxImu];
+float yawData[MaxImu], pitchData[MaxImu], rollData[MaxImu], sysTimeData[MaxImu], evtTimeData[MaxImu];
 
 int main(int argc, char **argv) {
 
 	int i, frameBufferSize = 8, skip = 0;
 	bool is_color = true, smooth = false;
-	std::string ifile, xfile, ofile, sfile, fourcc_string = "MJPG";
+	std::string ifile, xfile, ofile, sfile, wdir, fourcc_string = "MJPG";
 	for(i=1;i<argc;++i) {
-		if(strcmp(argv[i], "-i") == 0) ifile = argv[++i];
+		if (strcmp(argv[i], "-d") == 0) wdir = argv[++i];
+		else if(strcmp(argv[i], "-i") == 0) ifile = argv[++i];
 		else if(strcmp(argv[i], "-x") == 0) xfile = argv[++i];
 		else if(strcmp(argv[i], "-s") == 0) sfile = argv[++i];
 		else if(strcmp(argv[i], "-o") == 0) ofile = argv[++i];
@@ -134,42 +152,150 @@ int main(int argc, char **argv) {
 		else if(strcmp(argv[i], "-smooth") == 0) smooth = true;
 	}
 
-	int nAcc = readFloatArrayFromCsv(sfile.c_str(), AccId, accData[0], accData[1], accData[2], accTime, MaxImu);
-	int nGyr = readFloatArrayFromCsv(sfile.c_str(), GyrId, gyrData[0], gyrData[1], gyrData[2], gyrTime, MaxImu);
-	int nMag = readFloatArrayFromCsv(sfile.c_str(), MagId, magData[0], magData[1], magData[2], magTime, MaxImu);
+    wdir = "/home/jsvirzi/projects/dataVisualization/data";
+    sfile = "/home/jsvirzi/projects/mapping/data/gpsimu.root";
 
-	float accXMin = 999.0, accXMax = -999.0, accYMin = 999.0, accYMax = -999.0, accZMin = 999.0, accZMax = -999.0;
-	float gyrXMin = 999.0, gyrXMax = -999.0, gyrYMin = 999.0, gyrYMax = -999.0, gyrZMin = 999.0, gyrZMax = -999.0;
-	float magXMin = 999.0, magXMax = -999.0, magYMin = 999.0, magYMax = -999.0, magZMin = 999.0, magZMax = -999.0;
+    TFile fdS(sfile.c_str(), "read");
 
-	getMinMax(accData[0], nAcc, &accXMin, &accXMax);
-	getMinMax(accData[1], nAcc, &accYMin, &accYMax);
-	getMinMax(accData[2], nAcc, &accZMin, &accZMax);
+    double yaw, pitch, roll, time, time0;
+    TTree *tree = (TTree *)fdS.Get("ins");
+    TBranch *branchYaw = tree->GetBranch("yaw");
+    branchYaw->SetAddress(&yaw);
+    TBranch *branchRoll = tree->GetBranch("roll");
+    branchRoll->SetAddress(&roll);
+    TBranch *branchPitch = tree->GetBranch("pitch");
+    branchPitch->SetAddress(&pitch);
+    TBranch *branchTime = tree->GetBranch("time");
+    branchTime->SetAddress(&time);
+    int nAcc = 0, n = tree->GetEntries(), startEntry = 16, finalEntry = n;
+    for(i=startEntry;i<finalEntry;++i) {
+        branchYaw->GetEvent(i);
+        branchRoll->GetEvent(i);
+        branchPitch->GetEvent(i);
+        branchTime->GetEvent(i);
+        if(fabs(yaw) > 360.0) yaw = 0.0;
+        if(fabs(roll) > 360.0) roll = 0.0;
+        if(fabs(pitch) > 360.0) pitch = 0.0;
+        yawData[nAcc] = yaw;
+        rollData[nAcc] = roll;
+        pitchData[nAcc] = pitch;
+        if(i == startEntry) time0 = time;
+        else evtTimeData[nAcc] = (time - time0);
+        ++nAcc;
+    }
 
-	getMinMax(gyrData[0], nGyr, &gyrXMin, &gyrXMax);
-	getMinMax(gyrData[1], nGyr, &gyrYMin, &gyrYMax);
-	getMinMax(gyrData[2], nGyr, &gyrZMin, &gyrZMax);
+	float yawMin = 999.0, yawMax = -999.0, rollMin = 999.0, rollMax = -999.0, pitchMin = 999.0, pitchMax = -999.0;
 
-	getMinMax(magData[0], nMag, &magXMin, &magXMax);
-	getMinMax(magData[1], nMag, &magYMin, &magYMax);
-	getMinMax(magData[2], nMag, &magZMin, &magZMax);
+	getMinMax(yawData, nAcc, &yawMin, &yawMax);
+	getMinMax(rollData, nAcc, &rollMin, &rollMax);
+	getMinMax(pitchData, nAcc, &pitchMin, &pitchMax);
 
-//	for(i=0;i<nAcc;++i) {
-//		if(accData[0][i] > accXMax) { accXMax = accData[0][i]; }
-//		if(accData[0][i] < accXMin) { accXMin = accData[0][i]; }
-//		if(accData[1][i] > accYMax) { accYMax = accData[1][i]; }
-//		if(accData[1][i] < accYMin) { accYMin = accData[1][i]; }
-//		if(accData[2][i] > accZMax) { accZMax = accData[2][i]; }
-//		if(accData[2][i] < accZMin) { accZMin = accData[2][i]; }
-//	}
+    printf("min/max yaw=%f/%f roll=%f/%f pitch=%f/%f", yaw, roll, pitch);
 
-	printf("%d %d %d elements read from ACC/GYR/MAG\n", nAcc, nGyr, nMag);
-	printf("ACC min/max = %f/%f %f/%f %f/%f\n", accXMin, accXMax, accYMin, accYMax, accZMin, accZMax);
-	printf("GYR min/max = %f/%f %f/%f %f/%f\n", gyrXMin, gyrXMax, gyrYMin, gyrYMax, gyrZMin, gyrZMax);
-	printf("MAG min/max = %f/%f %f/%f %f/%f\n", magXMin, magXMax, magYMin, magYMax, magZMin, magZMax);
+    int nImages = 8, imageHead = 0, thumbnailWidth = 640, thumbnailHeight = 360, type = CV_8UC3;
+    Size sizeThumbnail(thumbnailWidth, thumbnailHeight);
+    Mat *thumbnails = new Mat [nImages];
+    for(i=0;i<nImages;++i) {
+        thumbnails[i] = Mat::zeros(sizeThumbnail, type);
+    }
+
+    int graphHeight = 360, graphWidth = nImages * thumbnailWidth;
+    int bigHeight = thumbnailHeight + 3 * graphHeight;
+    Size sizeGraph(graphWidth, graphHeight);
+    int bigWidth = nImages * thumbnailWidth;
+    Mat bigMat = Mat::zeros(bigHeight, bigWidth, type);
+
+    TCanvas canvas("canvas", "canvas", graphWidth, 3 * graphHeight);
+    canvas.SetLeftMargin(0.0);
+    canvas.SetRightMargin(0.0);
+    canvas.SetTopMargin(0.0);
+    canvas.SetBottomMargin(0.0);
+    canvas.Divide(1, 3, 0.0, 0.0);
+    canvas.SetBorderMode(0);
+
+    char filename[256];
+	namedWindow("main");
+	for(i=0;i<3000;++i) {
+		snprintf(filename, sizeof(filename), "%s/image-%010u-%1d.jpg", wdir.c_str(), i, i % 4);
+        printf("filename = [%s]\n", filename);
+		Mat mat = imread(filename);
+        resize(mat, thumbnails[imageHead], sizeThumbnail);
+        Mat tiles[nImages];
+        for(int j=0;j<nImages;++j) {
+            tiles[j] = Mat(bigMat, Rect(j * thumbnailWidth, 0, thumbnailWidth, thumbnailHeight));
+            thumbnails[(imageHead + j) % nImages].copyTo(tiles[j]);
+        }
+
+        int nGraphs = 3, nPoints = 200;
+        float *timeData = new float [ nPoints ];
+        for(int j=0;j<nPoints;++j) {
+            timeData[j] = j;
+        }
+        TGraph graphYaw(200, timeData, yawData);
+        TGraph graphRoll(200, timeData, rollData);
+        TGraph graphPitch(200, timeData, pitchData);
+        prettyGraph(&graphYaw, timeData[0], timeData[nPoints-1], yawMin, yawMax);
+        prettyGraph(&graphRoll, timeData[0], timeData[nPoints-1], rollMin, rollMax);
+        prettyGraph(&graphPitch, timeData[0], timeData[nPoints-1], pitchMin, pitchMax);
+
+        TGraph *graph = &graphYaw;
+        int smooth = 1;
+        canvas.cd(1);
+        gPad->SetLeftMargin(0.0);
+        gPad->SetRightMargin(0.0);
+        if(smooth) {
+            graphYaw.Draw("AC");
+        } else {
+            graphYaw.Draw("AP");
+        }
+        canvas.cd(2);
+        gPad->SetLeftMargin(0.0);
+        gPad->SetRightMargin(0.0);
+//        graph->GetXaxis()->SetLabelOffset(999);
+//        graph->GetXaxis()->SetLabelSize(0);
+        if(smooth) {
+            graphRoll.Draw("AC");
+        } else {
+            graphRoll.Draw("AP");
+        }
+        canvas.cd(3);
+        gPad->SetLeftMargin(0.0);
+        gPad->SetRightMargin(0.0);
+        if (smooth) {
+            graphPitch.Draw("AC");
+        } else {
+            graphPitch.Draw("AP");
+        }
+        canvas.Draw();
+        canvas.Update();
+        canvas.SaveAs("canvas.png");
+        Mat tMat, cMat = imread("canvas.png");
+        Mat ctile = Mat(bigMat, Rect(0, thumbnailHeight, graphWidth, nGraphs * graphHeight));
+        resize(cMat, tMat, sizeGraph);
+        tMat.copyTo(ctile);
+
+		imshow("main", bigMat);
+        if(cv::waitKey(50) == 'a') {
+            cv::waitKey(1000);
+        }
+        imageHead = (imageHead + 1) % nImages;
+	}
+
+#if 0
+    int pos = (frameBufferHead + 1) % frameBufferSize;
+    for (i = 0; i < frameBufferSize; ++i) {
+        Mat tileA = Mat(tile, Rect(i * width, 0, width, height));
+        Mat tileB = Mat(tile, Rect(i * width, height, width, height));
+        internalThumbnail[pos].copyTo(tileA);
+        externalThumbnail[pos].copyTo(tileB);
+        pos = (pos + 1) % frameBufferSize;
+    }
+#endif
+
+
+    return 0;
 
 	bool single = true;
-	// VideoCapture *cap;
 	VideoCapture icap(ifile.c_str()); /* open input stream - camera or file */
 	VideoCapture xcap;
 	if(!icap.isOpened()) return -1;
@@ -187,8 +313,8 @@ int main(int argc, char **argv) {
 
 	float twopi = 2.0 * M_PI, envelope;
 	float thetaAcc = 0, thetaGyr = 0.0, thetaMag = 0.0, dthetaAcc = twopi / 2.5, dthetaGyr = twopi / 3.5, dthetaMag = twopi / 4.5;
-	for(i=0;i<nAcc;++i) {
-		tData[i] = i * 0.005; /* 5 ms. assume equally spaced data */
+//	for(i=0;i<nAcc;++i) {
+//		tData[i] = i * 0.005; /* 5 ms. assume equally spaced data */
 
 		// printf("X=%f/Y=%f/Z=%f/T=%ld\n", accData[0][i], accData[1][i], accData[2][i], accTime[i]);
 
@@ -207,7 +333,9 @@ int main(int argc, char **argv) {
 //		magData[1][i] = envelope * sin(thetaMag + 1.0 * dthetaMag);
 //		magData[2][i] = envelope * sin(thetaMag + 2.0 * dthetaMag);
 //		thetaMag += dthetaMag;
-	}
+//	}
+
+#if 0
 
 	if(0.0 < ifps && ifps < 100.0) {
 		printf("input frame rate = %.f\n", ifps);
@@ -498,6 +626,8 @@ int main(int argc, char **argv) {
 	}
 	if(writer) delete writer;
 	return 0;
+
+#endif
 }
 
 
