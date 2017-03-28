@@ -18,7 +18,8 @@ using namespace std;
 
 void prettyGraph(TGraph *graph, float xMin, float xMax, float yMin, float yMax) {
     float lineWidth = 2.0;
-    int markerStyle = 1;
+    int markerStyle = kFullDotMedium;
+    int markerColor = kRed;
     graph->GetXaxis()->SetLabelOffset(999);
     graph->GetXaxis()->SetLabelSize(0);
     graph->GetYaxis()->SetLabelOffset(999);
@@ -30,6 +31,7 @@ void prettyGraph(TGraph *graph, float xMin, float xMax, float yMin, float yMax) 
     graph->SetLineColor(kBlue);
     graph->SetLineWidth(lineWidth);
     graph->SetMarkerStyle(markerStyle);
+    graph->SetMarkerColor(markerColor);
 }
 
 bool readFieldFromCsv(const char *line, int field, char *res, int max) {
@@ -153,6 +155,7 @@ int main(int argc, char **argv) {
 	}
 
     wdir = "/home/jsvirzi/projects/dataVisualization/data";
+    wdir = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26";
     sfile = "/home/jsvirzi/projects/mapping/data/gpsimu.root";
 
     TFile fdS(sfile.c_str(), "read");
@@ -192,26 +195,33 @@ int main(int argc, char **argv) {
 
     printf("min/max yaw=%f/%f roll=%f/%f pitch=%f/%f", yaw, roll, pitch);
 
-    int nImages = 8, imageHead = 0, thumbnailWidth = 640, thumbnailHeight = 360, type = CV_8UC3;
+    int nImages = 4, imageHead = 0, thumbnailWidth = 480, thumbnailHeight = 270, type = CV_8UC3;
     Size sizeThumbnail(thumbnailWidth, thumbnailHeight);
     Mat *thumbnails = new Mat [nImages];
     for(i=0;i<nImages;++i) {
         thumbnails[i] = Mat::zeros(sizeThumbnail, type);
     }
 
-    int graphHeight = 360, graphWidth = nImages * thumbnailWidth;
-    int bigHeight = thumbnailHeight + 3 * graphHeight;
+    int nGraphs = 3, graphHeight = 360, graphWidth = nImages * thumbnailWidth;
+    int bigHeight = thumbnailHeight + nGraphs * graphHeight;
     Size sizeGraph(graphWidth, graphHeight);
     int bigWidth = nImages * thumbnailWidth;
     Mat bigMat = Mat::zeros(bigHeight, bigWidth, type);
 
-    TCanvas canvas("canvas", "canvas", graphWidth, 3 * graphHeight);
+    Size sizeCanvas(graphWidth, nGraphs * graphHeight);
+    TCanvas canvas("canvas", "canvas", sizeCanvas.width, sizeCanvas.height);
     canvas.SetLeftMargin(0.0);
     canvas.SetRightMargin(0.0);
     canvas.SetTopMargin(0.0);
     canvas.SetBottomMargin(0.0);
     canvas.Divide(1, 3, 0.0, 0.0);
     canvas.SetBorderMode(0);
+
+    int nGraphPoints = 200;
+    float *timeData = new float [ nGraphPoints ];
+    for(int j=0;j<nGraphPoints;++j) {
+        timeData[j] = j;
+    }
 
     char filename[256];
 	namedWindow("main");
@@ -226,53 +236,51 @@ int main(int argc, char **argv) {
             thumbnails[(imageHead + j) % nImages].copyTo(tiles[j]);
         }
 
-        int nGraphs = 3, nPoints = 200;
-        float *timeData = new float [ nPoints ];
-        for(int j=0;j<nPoints;++j) {
-            timeData[j] = j;
-        }
-        TGraph graphYaw(200, timeData, yawData);
-        TGraph graphRoll(200, timeData, rollData);
-        TGraph graphPitch(200, timeData, pitchData);
-        prettyGraph(&graphYaw, timeData[0], timeData[nPoints-1], yawMin, yawMax);
-        prettyGraph(&graphRoll, timeData[0], timeData[nPoints-1], rollMin, rollMax);
-        prettyGraph(&graphPitch, timeData[0], timeData[nPoints-1], pitchMin, pitchMax);
+        if(nGraphs > 0) {
+            int imuPos = i * 20;
+            TGraph graphYaw(nGraphPoints, timeData, &yawData[imuPos]);
+            TGraph graphRoll(nGraphPoints, timeData, &rollData[imuPos]);
+            TGraph graphPitch(nGraphPoints, timeData, &pitchData[imuPos]);
+            prettyGraph(&graphYaw, timeData[0], timeData[nGraphPoints-1], yawMin, yawMax);
+            prettyGraph(&graphRoll, timeData[0], timeData[nGraphPoints-1], rollMin, rollMax);
+            prettyGraph(&graphPitch, timeData[0], timeData[nGraphPoints-1], pitchMin, pitchMax);
 
-        TGraph *graph = &graphYaw;
-        int smooth = 1;
-        canvas.cd(1);
-        gPad->SetLeftMargin(0.0);
-        gPad->SetRightMargin(0.0);
-        if(smooth) {
-            graphYaw.Draw("AC");
-        } else {
-            graphYaw.Draw("AP");
-        }
-        canvas.cd(2);
-        gPad->SetLeftMargin(0.0);
-        gPad->SetRightMargin(0.0);
+            TGraph *graph = &graphYaw;
+            int smooth = 0;
+            canvas.cd(1);
+            gPad->SetLeftMargin(0.0);
+            gPad->SetRightMargin(0.0);
+            if(smooth) {
+                graphYaw.Draw("AC");
+            } else {
+                graphYaw.Draw("AP");
+            }
+            canvas.cd(2);
+            gPad->SetLeftMargin(0.0);
+            gPad->SetRightMargin(0.0);
 //        graph->GetXaxis()->SetLabelOffset(999);
 //        graph->GetXaxis()->SetLabelSize(0);
-        if(smooth) {
-            graphRoll.Draw("AC");
-        } else {
-            graphRoll.Draw("AP");
+            if(smooth) {
+                graphRoll.Draw("AC");
+            } else {
+                graphRoll.Draw("AP");
+            }
+            canvas.cd(3);
+            gPad->SetLeftMargin(0.0);
+            gPad->SetRightMargin(0.0);
+            if (smooth) {
+                graphPitch.Draw("AC");
+            } else {
+                graphPitch.Draw("AP");
+            }
+            canvas.Update();
+            canvas.Draw();
+            canvas.SaveAs("canvas.png");
+            Mat tMat, cMat = imread("canvas.png");
+            Mat ctile = Mat(bigMat, Rect(0, thumbnailHeight, graphWidth, nGraphs * graphHeight));
+            resize(cMat, tMat, sizeCanvas);
+            tMat.copyTo(ctile);
         }
-        canvas.cd(3);
-        gPad->SetLeftMargin(0.0);
-        gPad->SetRightMargin(0.0);
-        if (smooth) {
-            graphPitch.Draw("AC");
-        } else {
-            graphPitch.Draw("AP");
-        }
-        canvas.Draw();
-        canvas.Update();
-        canvas.SaveAs("canvas.png");
-        Mat tMat, cMat = imread("canvas.png");
-        Mat ctile = Mat(bigMat, Rect(0, thumbnailHeight, graphWidth, nGraphs * graphHeight));
-        resize(cMat, tMat, sizeGraph);
-        tMat.copyTo(ctile);
 
 		imshow("main", bigMat);
         if(cv::waitKey(50) == 'a') {
