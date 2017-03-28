@@ -11,10 +11,38 @@
 #include <TFile.h>
 #include <TTree.h>
 
+#include "lidar.h"
+
 using namespace cv;
 using namespace std;
 
 #define ESC 27
+
+enum {
+    TypeLidarDataPacket,
+    TypeLidarPositionPacket,
+    LidarPacketTypes,
+};
+static LidarPacketHeader gLidarPacketHeader;
+int readLidarPacket(int fd, void *p) {
+    int type;
+    static LidarDataPacket lidarDataPacket;
+    static LidarPositionPacket lidarPositionPacket;
+    static PcapPacketHeader packetHeader;
+    memset(&packetHeader, 0, sizeof(packetHeader));
+    memset(&gLidarPacketHeader, 0, sizeof(gLidarPacketHeader));
+    read(fd, &packetHeader, sizeof(packetHeader));
+    int size = packetHeader.orig_len;
+    if (size == lidarDataPacketSize) {
+        p = (void *)&lidarDataPacket;
+    } else if (size == lidarPositionPacketSize) {
+        p = (void *)&lidarPositionPacket;
+    } else {
+        p = 0;
+        type = UN
+    }
+    return p;
+}
 
 void prettyGraph(TGraph *graph, float xMin, float xMax, float yMin, float yMax) {
     float lineWidth = 2.0;
@@ -155,8 +183,10 @@ int main(int argc, char **argv) {
 	}
 
     wdir = "/home/jsvirzi/projects/dataVisualization/data";
-    wdir = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26";
     sfile = "/home/jsvirzi/projects/mapping/data/gpsimu.root";
+    /*** from sunday ***/
+    wdir = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26";
+    sfile = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26/gpsimu.root";
 
     TFile fdS(sfile.c_str(), "read");
 
@@ -237,7 +267,7 @@ int main(int argc, char **argv) {
         }
 
         if(nGraphs > 0) {
-            int imuPos = i * 20;
+            int imuPos = i * 10;
             TGraph graphYaw(nGraphPoints, timeData, &yawData[imuPos]);
             TGraph graphRoll(nGraphPoints, timeData, &rollData[imuPos]);
             TGraph graphPitch(nGraphPoints, timeData, &pitchData[imuPos]);

@@ -9,6 +9,7 @@ execute_process(COMMAND pkg-config --libs opencv OUTPUT_VARIABLE OPENCVLIBS)
 # execute_process(COMMAND pkg-config --cflags opencv OUTPUT_VARIABLE OPENCVINCS)
 # include(${OPENCVINCS})
 
+include_directories(src)
 include_directories(/usr/local/include/opencv)
 include_directories(/usr/local/include)
 
