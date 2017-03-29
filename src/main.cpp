@@ -10,6 +10,8 @@
 #include <math.h>
 #include <TFile.h>
 #include <TTree.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #include "lidar.h"
 
@@ -18,30 +20,50 @@ using namespace std;
 
 #define ESC 27
 
-enum {
-    TypeLidarDataPacket,
-    TypeLidarPositionPacket,
-    LidarPacketTypes,
+class PcapReader {
+public:
+    enum {
+        TypeLidarDataPacket,
+        TypeLidarPositionPacket,
+        LidarPacketTypes,
+    };
+    PcapReader(const char *file);
+    int readPacket(void **p);
+    int fd;
+#define NPOINTS (3600 * 16)
+    LidarData pointCloud[NPOINTS];
+    LidarPacketHeader lidarPacketHeader;
+    LidarDataPacket lidarDataPacket;
+    LidarPositionPacket lidarPositionPacket;
+    PcapPacketHeader packetHeader;
 };
-static LidarPacketHeader gLidarPacketHeader;
-int readLidarPacket(int fd, void *p) {
+
+PcapReader::PcapReader(const char *filename) {
+    PcapGlobalHeader pcapGlobalHeader;
+    fd = open(filename, O_RDONLY, S_IREAD);
+    read(fd, &pcapGlobalHeader, sizeof(PcapGlobalHeader)); /* this is overhead at beginning of file */
+}
+
+int PcapReader::readPacket(void **p) {
     int type;
-    static LidarDataPacket lidarDataPacket;
-    static LidarPositionPacket lidarPositionPacket;
-    static PcapPacketHeader packetHeader;
     memset(&packetHeader, 0, sizeof(packetHeader));
-    memset(&gLidarPacketHeader, 0, sizeof(gLidarPacketHeader));
-    read(fd, &packetHeader, sizeof(packetHeader));
-    int size = packetHeader.orig_len;
-    if (size == lidarDataPacketSize) {
-        p = (void *)&lidarDataPacket;
-    } else if (size == lidarPositionPacketSize) {
-        p = (void *)&lidarPositionPacket;
+    memset(&lidarPacketHeader, 0, sizeof(lidarPacketHeader));
+    int size = read(fd, &packetHeader, sizeof(packetHeader));
+    size = packetHeader.orig_len;
+    read(fd, &lidarPacketHeader, sizeof(LidarPacketHeader));
+    if (size == (lidarDataPacketSize + sizeof(LidarPacketHeader))) {
+        read(fd, &lidarDataPacket, lidarDataPacketSize);
+        *p = (void *)&lidarDataPacket;
+        type = TypeLidarDataPacket;
+    } else if (size == (lidarPositionPacketSize + sizeof(LidarPacketHeader))) {
+        read(fd, &lidarPositionPacket, lidarPositionPacketSize);
+        *p = (void *)&lidarPositionPacket;
+        type = TypeLidarPositionPacket;
     } else {
-        p = 0;
-        type = UN
+        *p = 0;
+        type = LidarPacketTypes;
     }
-    return p;
+    return type;
 }
 
 void prettyGraph(TGraph *graph, float xMin, float xMax, float yMin, float yMax) {
@@ -170,12 +192,13 @@ int main(int argc, char **argv) {
 
 	int i, frameBufferSize = 8, skip = 0;
 	bool is_color = true, smooth = false;
-	std::string ifile, xfile, ofile, sfile, wdir, fourcc_string = "MJPG";
+	std::string ifile, xfile, ofile, sfile, wdir, fourcc_string = "MJPG", lfile = "lidar.pcap";
 	for(i=1;i<argc;++i) {
-		if (strcmp(argv[i], "-d") == 0) wdir = argv[++i];
+		if (strcmp(argv[i], "-d") == 0) wdir = argv[++i]; /* working directory for data */
 		else if(strcmp(argv[i], "-i") == 0) ifile = argv[++i];
+		else if(strcmp(argv[i], "-l") == 0) lfile = argv[++i]; /* lidar */
 		else if(strcmp(argv[i], "-x") == 0) xfile = argv[++i];
-		else if(strcmp(argv[i], "-s") == 0) sfile = argv[++i];
+		else if(strcmp(argv[i], "-s") == 0) sfile = argv[++i]; /* sensor/gps data file */
 		else if(strcmp(argv[i], "-o") == 0) ofile = argv[++i];
 		else if(strcmp(argv[i], "-n") == 0) frameBufferSize = atoi(argv[++i]);
 		else if(strcmp(argv[i], "-skip") == 0) skip = atoi(argv[++i]);
@@ -186,9 +209,37 @@ int main(int argc, char **argv) {
     sfile = "/home/jsvirzi/projects/mapping/data/gpsimu.root";
     /*** from sunday ***/
     wdir = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26";
-    sfile = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26/gpsimu.root";
+    // sfile = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26/gpsimu.root";
+    sfile = wdir + "/gpsimu.root";
+    lfile = wdir + "/lidar.pcap";
 
     TFile fdS(sfile.c_str(), "read");
+
+    PcapReader pcapReader(lfile.c_str());
+    int lidarPacketType;
+    void *p;
+
+    int nDataPackets = 0, nPositionPackets = 0;
+    uint32_t previousTimestamp = 0, timestamp = 0;
+    while((lidarPacketType = pcapReader.readPacket(&p)) != pcapReader.LidarPacketTypes) {
+        if(lidarPacketType == pcapReader.TypeLidarDataPacket) {
+            LidarDataPacket *lidarDataPacket = (LidarDataPacket *)p;
+            LidarData *lidarData = pcapReader.pointCloud;
+            convertLidarPacketToLidarData(lidarDataPacket, lidarData, -M_PI, M_PI);
+            ++nDataPackets;
+        } else if (lidarPacketType == pcapReader.TypeLidarPositionPacket) {
+            LidarPositionPacket *lidarPositionPacket = (LidarPositionPacket *)p;
+            char nmeaSentence[sizeof(lidarPositionPacket->nmeaSentence) + 1];
+            snprintf(nmeaSentence, sizeof(nmeaSentence), "%s", lidarPositionPacket->nmeaSentence);
+            previousTimestamp = timestamp;
+            timestamp = lidarPositionPacket->timestamp[3];
+            timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[2];
+            timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[1];
+            timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[0];
+            ++nPositionPackets;
+            printf("NMEA=[%s]. TIME=0x%8.8x=%d. deltaT=%d. D=%d/P=%d\n", nmeaSentence, timestamp, timestamp, timestamp - previousTimestamp, nDataPackets, nPositionPackets);
+        }
+    }
 
     double yaw, pitch, roll, time, time0;
     TTree *tree = (TTree *)fdS.Get("ins");
@@ -223,7 +274,7 @@ int main(int argc, char **argv) {
 	getMinMax(rollData, nAcc, &rollMin, &rollMax);
 	getMinMax(pitchData, nAcc, &pitchMin, &pitchMax);
 
-    printf("min/max yaw=%f/%f roll=%f/%f pitch=%f/%f", yaw, roll, pitch);
+    printf("min/max yaw=%f/%f roll=%f/%f pitch=%f/%f", yawMin, yawMax, rollMin, rollMax, pitchMin, pitchMax);
 
     int nImages = 4, imageHead = 0, thumbnailWidth = 480, thumbnailHeight = 270, type = CV_8UC3;
     Size sizeThumbnail(thumbnailWidth, thumbnailHeight);

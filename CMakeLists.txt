@@ -3,7 +3,7 @@ project(dataVisualization)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -m64 -std=c++11 -g -Wall -Wextra -Wl,--no-as-needed -I/home/jsvirzi/root/include")
 
-set(SOURCE_FILES src/main.cpp)
+set(SOURCE_FILES src/main.cpp src/lidar.cpp)
 
 execute_process(COMMAND pkg-config --libs opencv OUTPUT_VARIABLE OPENCVLIBS)
 # execute_process(COMMAND pkg-config --cflags opencv OUTPUT_VARIABLE OPENCVINCS)

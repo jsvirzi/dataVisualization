@@ -1,10 +1,8 @@
 #ifndef LIDAR_H
 #define LIDAR_H
 
-#include <device.h>
 #include <inttypes.h>
 #include <pthread.h>
-#include "common.h"
 
 #define nLidarBlocks 12
 
@@ -61,34 +59,6 @@ const int lidarDataPacketSize = 1206;
 const int lidarBlockSize = 100;
 const int lidarDatumSize = 3;
 const int lidarPositionPacketSize = 512;
-
-typedef struct {
-  ThreadParams threadParams;
-  LidarDataPacket *dataPacketBuffer;
-  LidarPositionPacket *positionPacketBuffer;
-  int dataPacketBufferHead;
-  int positionPacketBufferHead;
-  int dataPacketBufferSize;
-  int positionPacketBufferSize;
-  int fdData;
-  int fdPosition;
-  int fdPcap;
-  int nPackets;
-  double minAzimuth;  // TODO necessary?
-  double maxAzimuth;  // TODO necessary?
-} LidarServerParams;
-
-void *lidarLoop(void *ptr);
-
-class Lidar : public Device {
- public:
-  LidarServerParams lidarServerParams;
-  Lidar();
-  ~Lidar();
-  int init(const char *ipAddress, const char *pcapFilename);
-  int startCapture(double minAzimuth = 0.0, double maxAzimuth = 0.0);
-  int stopCapture();
-};
 
 /*
  * https://wiki.wireshark.org/Development/LibpcapFileFormat
