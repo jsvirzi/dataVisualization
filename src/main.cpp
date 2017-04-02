@@ -14,57 +14,14 @@
 #include <sys/stat.h>
 
 #include "lidar.h"
+#include "pcapreader.h"
 
 using namespace cv;
 using namespace std;
 
+const long TimeBetweenGpsAndUnixEpochs = 315964782;
+
 #define ESC 27
-
-class PcapReader {
-public:
-    enum {
-        TypeLidarDataPacket,
-        TypeLidarPositionPacket,
-        LidarPacketTypes,
-    };
-    PcapReader(const char *file);
-    int readPacket(void **p);
-    int fd;
-#define NPOINTS (3600 * 16)
-    LidarData pointCloud[NPOINTS];
-    LidarPacketHeader lidarPacketHeader;
-    LidarDataPacket lidarDataPacket;
-    LidarPositionPacket lidarPositionPacket;
-    PcapPacketHeader packetHeader;
-};
-
-PcapReader::PcapReader(const char *filename) {
-    PcapGlobalHeader pcapGlobalHeader;
-    fd = open(filename, O_RDONLY, S_IREAD);
-    read(fd, &pcapGlobalHeader, sizeof(PcapGlobalHeader)); /* this is overhead at beginning of file */
-}
-
-int PcapReader::readPacket(void **p) {
-    int type;
-    memset(&packetHeader, 0, sizeof(packetHeader));
-    memset(&lidarPacketHeader, 0, sizeof(lidarPacketHeader));
-    int size = read(fd, &packetHeader, sizeof(packetHeader));
-    size = packetHeader.orig_len;
-    read(fd, &lidarPacketHeader, sizeof(LidarPacketHeader));
-    if (size == (lidarDataPacketSize + sizeof(LidarPacketHeader))) {
-        read(fd, &lidarDataPacket, lidarDataPacketSize);
-        *p = (void *)&lidarDataPacket;
-        type = TypeLidarDataPacket;
-    } else if (size == (lidarPositionPacketSize + sizeof(LidarPacketHeader))) {
-        read(fd, &lidarPositionPacket, lidarPositionPacketSize);
-        *p = (void *)&lidarPositionPacket;
-        type = TypeLidarPositionPacket;
-    } else {
-        *p = 0;
-        type = LidarPacketTypes;
-    }
-    return type;
-}
 
 void prettyGraph(TGraph *graph, float xMin, float xMax, float yMin, float yMax) {
     float lineWidth = 2.0;
