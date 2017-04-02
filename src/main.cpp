@@ -188,6 +188,28 @@ int readFloatArrayFromCsv(const char *filename, int srcId, float *x, float *y, f
 #define MaxImu 1000000
 float yawData[MaxImu], pitchData[MaxImu], rollData[MaxImu], sysTimeData[MaxImu], evtTimeData[MaxImu];
 
+time_t hourTimeBaseInSeconds(const char *dateStr, const char *timeStr) {
+	struct tm t;
+	memset(&t, 0, sizeof(struct tm));
+	char str[3];
+	str[2] = 0;
+	str[0] = dateStr[0];
+	str[1] = dateStr[1];
+	sscanf(str, "%02d", &t.tm_mday);
+	str[0] = dateStr[2];
+	str[1] = dateStr[3];
+	sscanf(str, "%02d", &t.tm_mon);
+	str[0] = dateStr[4];
+	str[1] = dateStr[5];
+	sscanf(str, "%02d", &t.tm_year);
+	t.tm_year += 2000; /* 2017 comes as 17 */
+	str[0] = timeStr[0];
+	str[1] = timeStr[1];
+	sscanf(str, "%02d", &t.tm_hour);
+	time_t seconds = mktime(&t);
+	return seconds;
+}
+
 int main(int argc, char **argv) {
 
 	int i, frameBufferSize = 8, skip = 0;
@@ -221,11 +243,12 @@ int main(int argc, char **argv) {
 
     int nDataPackets = 0, nPositionPackets = 0;
     uint32_t previousTimestamp = 0, timestamp = 0;
+	time_t timeBase = 0;
     while((lidarPacketType = pcapReader.readPacket(&p)) != pcapReader.LidarPacketTypes) {
         if(lidarPacketType == pcapReader.TypeLidarDataPacket) {
             LidarDataPacket *lidarDataPacket = (LidarDataPacket *)p;
             LidarData *lidarData = pcapReader.pointCloud;
-            convertLidarPacketToLidarData(lidarDataPacket, lidarData, -M_PI, M_PI);
+            convertLidarPacketToLidarData(lidarDataPacket, lidarData, timeBase, -M_PI, M_PI);
             ++nDataPackets;
         } else if (lidarPacketType == pcapReader.TypeLidarPositionPacket) {
             LidarPositionPacket *lidarPositionPacket = (LidarPositionPacket *)p;
@@ -237,9 +260,18 @@ int main(int argc, char **argv) {
             timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[1];
             timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[0];
             ++nPositionPackets;
-            printf("NMEA=[%s]. TIME=0x%8.8x=%d. deltaT=%d. D=%d/P=%d\n", nmeaSentence, timestamp, timestamp, timestamp - previousTimestamp, nDataPackets, nPositionPackets);
+            unsigned char valid = lidarPositionPacket->timestamp[4];
+			char timeStr[32], dateStr[32];
+			readFieldFromCsv(nmeaSentence, 1, timeStr, sizeof(timeStr));
+			readFieldFromCsv(nmeaSentence, 9, dateStr, sizeof(dateStr));
+			timeBase = hourTimeBaseInSeconds(dateStr, timeStr);
+            printf("NMEA=[%s]. TIME(0x%2.2x)=0x%8.8x=%d. deltaT=%d. D=%d/P=%d. DATE/TIME=[%s/%s]\n",
+				nmeaSentence, valid, timestamp, timestamp, timestamp - previousTimestamp, nDataPackets,
+				nPositionPackets, timeStr, dateStr);
         }
     }
+
+    getchar();
 
     double yaw, pitch, roll, time, time0;
     TTree *tree = (TTree *)fdS.Get("ins");
