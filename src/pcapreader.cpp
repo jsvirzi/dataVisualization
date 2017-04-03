@@ -3,8 +3,8 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "pcapreader.h"
 #include "lidar.h"
+#include "pcapreader.h"
 
 PcapReader::PcapReader(const char *filename) {
     PcapGlobalHeader pcapGlobalHeader;
