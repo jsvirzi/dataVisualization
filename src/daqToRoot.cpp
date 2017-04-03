@@ -36,6 +36,9 @@ int main(int argc, char **argv) {
     wdir = "/Users/jsvirzi/Documents/rigData/26-03-2017-05-16-48-6661";
 	wdir = "/home/jsvirzi/projects/data/rig/26-03-2017-05-22-26-930";
 
+	ofile = wdir + "/daq.root";
+	TFile fpOut(ofile.c_str(), "recreate");
+
 	TTree *treeLidar = new TTree("lidar", "lidar");
 
 	/* setup lidar */
@@ -76,13 +79,15 @@ int main(int argc, char **argv) {
 	unsigned int *exposure = new unsigned int [maxFrames];
 	unsigned int *frameCounter = new unsigned int [maxFrames];
 	uint64_t *sensorTimestamp = new uint64_t [maxFrames];
+	uint64_t deltaSensorTimestamp;
 	tree->Branch("nFrames", &nFrames, "nFrames/I");
 	tree->Branch("daqTime", daqTime, "daqTime[nFrames]/l"); /* same as lidar */
 	tree->Branch("ordinal", ordinal, "ordinal[nFrames]/i");
 	tree->Branch("frameCounter", frameCounter, "frameCounter[nFrames]/i");
 	tree->Branch("fileSize", fileSize, "fileSize[nFrames]/i");
 	tree->Branch("cpuPhase", cpuPhase, "cpuPhase[nFrames]/i");
-	tree->Branch("sensorTimestamp", sensorTimestamp, "sensorTimestamp[nFrames]/i");
+	tree->Branch("sensorTimestamp", sensorTimestamp, "sensorTimestamp[nFrames]/l");
+	tree->Branch("deltaSensorTimestamp", &deltaSensorTimestamp, "deltaSensorTimestamp/l");
     tree->Branch("shutter", shutter, "shutter[nFrames]/i");
     tree->Branch("gain", gain, "gain[nFrames]/i");
     tree->Branch("exposure", exposure, "exposure[nFrames]/i");
@@ -95,31 +100,58 @@ int main(int argc, char **argv) {
 	ssize_t nRead;
     size_t maxLineDim = 1024;
     char *line = new char [maxLineDim];
-    ifile = wdir + "/video-0.csv";
-    FILE *fp = fopen(ifile.c_str(), "r");
+	FILE *fp[4];
+	ifile = wdir + "/video-0.csv";
+    fp[0] = fopen(ifile.c_str(), "r");
+	ifile = wdir + "/video-1.csv";
+    fp[1] = fopen(ifile.c_str(), "r");
+	ifile = wdir + "/video-2.csv";
+    fp[2] = fopen(ifile.c_str(), "r");
+	ifile = wdir + "/video-3.csv";
+    fp[3] = fopen(ifile.c_str(), "r");
 	char frameCounterStr[64];
 	char ordinalStr[64];
 	char sensorTimestampStr[64];
 	char shutterStr[32];
 	char exposureStr[32];
 	char gainStr[32];
-	nFrames = 1;
-    while((nRead = getline(&line, &maxLineDim, fp)) != -1) {
-        printf("line = [%s]\n", line);
-		readFieldFromCsv(line, 4, sensorTimestampStr, sizeof(sensorTimestampStr));
-		readFieldFromCsv(line, 5, ordinalStr, sizeof(ordinalStr));
-		readFieldFromCsv(line, 6, frameCounterStr, sizeof(frameCounterStr));
-		readFieldFromCsv(line, 7, shutterStr, sizeof(shutterStr));
-		readFieldFromCsv(line, 8, gainStr, sizeof(gainStr));
-		readFieldFromCsv(line, 9, exposureStr, sizeof(exposureStr));
-		sscanf(sensorTimestampStr, "%lu", &sensorTimestamp[0]);
-		sscanf(ordinalStr, "%d", &ordinal[0]);
-		sscanf(frameCounterStr, "%d", &frameCounter[0]);
-		sscanf(shutterStr, "%d", &shutter[0]);
-		sscanf(gainStr, "%d", &gain[0]);
-		sscanf(exposureStr, "%d", &exposure[0]);
-		printf("timestamp=%lu ord=%u fc=%d sh=%u gain=%u exp=%u\n", sensorTimestamp[0], ordinal[0], frameCounter[0], shutter[0], gain[0], exposure[0]);
-    }
+	bool filesOk = true;
+	deltaSensorTimestamp = 0;
+	uint64_t previousSensorTimestamp = 0;
+	while(filesOk) {
+		for(i=0;i<4;++i) {
+			nFrames = 1;
+			if ((nRead = getline(&line, &maxLineDim, fp[i])) != -1) {
+				printf("line = [%s]\n", line);
+				readFieldFromCsv(line, 4, sensorTimestampStr, sizeof(sensorTimestampStr));
+				readFieldFromCsv(line, 5, ordinalStr, sizeof(ordinalStr));
+				readFieldFromCsv(line, 6, frameCounterStr, sizeof(frameCounterStr));
+				readFieldFromCsv(line, 7, shutterStr, sizeof(shutterStr));
+				readFieldFromCsv(line, 8, gainStr, sizeof(gainStr));
+				readFieldFromCsv(line, 9, exposureStr, sizeof(exposureStr));
+				sscanf(sensorTimestampStr, "%lu", &sensorTimestamp[0]);
+				sscanf(ordinalStr, "%d", &ordinal[0]);
+				sscanf(frameCounterStr, "%d", &frameCounter[0]);
+				sscanf(shutterStr, "%d", &shutter[0]);
+				sscanf(gainStr, "%d", &gain[0]);
+				sscanf(exposureStr, "%d", &exposure[0]);
+				cpuPhase[0] = i;
+				if(previousSensorTimestamp == 0) {
+					deltaSensorTimestamp = 0;
+				} else {
+					deltaSensorTimestamp = sensorTimestamp[0] - previousSensorTimestamp;
+				}
+				previousSensorTimestamp = sensorTimestamp[0];
+				printf("timestamp=%lu ord=%u fc=%d sh=%u gain=%u exp=%u\n", sensorTimestamp[0], ordinal[0], frameCounter[0], shutter[0], gain[0], exposure[0]);
+				treeVideo->Fill();
+			} else {
+				filesOk = false;
+			}
+		}
+	}
+
+	fpOut.Write();
+	fpOut.Close();
 
 	delete [] daqTime;
 	delete [] channel;
