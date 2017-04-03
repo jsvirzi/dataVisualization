@@ -32,6 +32,8 @@ int main(int argc, char **argv) {
 		else if(strcmp(argv[i], "-o") == 0) ofile = argv[++i];
 	}
 
+    wdir = "/Users/jsvirzi/Documents/rigData/26-03-2017-05-16-48-6661";
+
 	TTree *treeLidar = new TTree("lidar", "lidar");
 
 	/* setup lidar */
@@ -49,14 +51,14 @@ int main(int argc, char **argv) {
 	float *theta = new float [maxLidarPoints];
 	float *phi = new float [maxLidarPoints];
 	int nLidarPoints;
-	TBranch *branchNLidarPoints = tree->Branch("nLidarPoints", &nLidarPoints, "nLidarPoints/I");
-	TBranch *branchDaqTime = tree->Branch("daqTime", daqTime, "daqTime[nLidarPoints]/l");
-	TBranch *branchChannel = tree->Branch("channel", channel, "channel[nLidarPoints]/I");
-	TBranch *branchAzimuth = tree->Branch("azimuth", azimuth, "azimuth[nLidarPoints]/I");
-	TBranch *branchIntensity = tree->Branch("intensity", intensity, "intensity[nLidarPoints]/I");
-	TBranch *branchR = tree->Branch("R", R, "R[nLidarPoints]/F");
-	TBranch *branchTheta = tree->Branch("theta", theta, "theta[nLidarPoints]/F");
-	TBranch *branchPhi = tree->Branch("phi", phi, "phi[nLidarPoints]/F");
+	tree->Branch("nLidarPoints", &nLidarPoints, "nLidarPoints/I");
+	tree->Branch("daqTime", daqTime, "daqTime[nLidarPoints]/l");
+	tree->Branch("channel", channel, "channel[nLidarPoints]/I");
+	tree->Branch("azimuth", azimuth, "azimuth[nLidarPoints]/I");
+	tree->Branch("intensity", intensity, "intensity[nLidarPoints]/I");
+	tree->Branch("R", R, "R[nLidarPoints]/F");
+	tree->Branch("theta", theta, "theta[nLidarPoints]/F");
+	tree->Branch("phi", phi, "phi[nLidarPoints]/F");
 
 	TTree *treeVideo = new TTree("video", "video");
 	tree = treeVideo;
@@ -65,15 +67,31 @@ int main(int argc, char **argv) {
 	int *ordinal = new int [maxFrames];
 	int *fileSize = new int [maxFrames];
 	int *cpuPhase = new int [maxFrames];
+    int *shutter = new int [maxFrames];
+    int *gain = new int [maxFrames];
+    int *exposure = new int [maxFrames];
 	uint64_t *sensorTimestamp = new uint64_t [maxFrames];
-	TBranch *branchDaqTime = tree->Branch("daqTime", daqTime, "daqTime[nFrames]/l"); /* same as lidar */
-	TBranch *branchOrdinal = tree->Branch("ordinal", ordinal, "ordinal[nFrames]/I");
-	TBranch *branchFileSize = tree->Branch("fileSize", fileSize, "fileSize[nFrames]/I");
-	TBranch *branchCpuPhase = tree->Branch("cpuPhase", cpuPhase, "cpuPhase[nFrames]/I");
-	TBranch *branchSensorTimestamp = tree->Branch("sensorTimestamp", sensorTimestamp, "sensorTimestamp[nFrames]/I");
+	tree->Branch("daqTime", daqTime, "daqTime[nFrames]/l"); /* same as lidar */
+	tree->Branch("ordinal", ordinal, "ordinal[nFrames]/I");
+	tree->Branch("fileSize", fileSize, "fileSize[nFrames]/I");
+	tree->Branch("cpuPhase", cpuPhase, "cpuPhase[nFrames]/I");
+	tree->Branch("sensorTimestamp", sensorTimestamp, "sensorTimestamp[nFrames]/l");
+    tree->Branch("shutter", shutter, "shutter[nFrames]/I");
+    tree->Branch("gain", gain, "gain[nFrames]/I");
+    tree->Branch("exposure", exposure, "exposure[nFrames]/I");
 
+    TTree *treeImu = new TTree("imu", "imu");
+    tree = treeImu;
+    int nImuPoints;
+    const int maxImuPoints = 100;
 
-
+    size_t maxLineDim = 1024;
+    char **line = 0;
+    ifile = wdir + "video-0.csv";
+    FILE *fp = fopen(ifile.c_str(), "r");
+    while(getline(line, &maxLineDim, fp)) {
+        printf("line = [%s]\n", line);
+    }
 
 	delete [] daqTime;
 	delete [] channel;
