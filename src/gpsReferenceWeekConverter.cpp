@@ -67,7 +67,7 @@ static struct simpleDate {
 
 uint64_t secondsAtStartOfReferenceWeek(int week) {
     int index = week - 1930;
-    if(referenceWeeksToSimpleDate[index].gpsWeek != week) return 0;
+    if(referenceWeeksToSimpleDate[index].gpsWeek != week) return 0; /* ensure consistency */
     struct tm t;
     t.tm_mday = referenceWeeksToSimpleDate[index].day;
     t.tm_mon = referenceWeeksToSimpleDate[index].month;

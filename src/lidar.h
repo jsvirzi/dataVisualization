@@ -35,7 +35,7 @@ typedef struct {
 
 typedef struct {
     double R, theta, phi;  // R = distance, phi = azimuth, theta = altitude
-    int intensity, channel;
+    int intensity, channel, azimuth;
     uint64_t timestamp;
 } LidarData;
 
