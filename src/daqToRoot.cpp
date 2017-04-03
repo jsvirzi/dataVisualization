@@ -68,24 +68,24 @@ int main(int argc, char **argv) {
 	tree = treeVideo;
 	int nFrames;
 	const int maxFrames = 16; /* maximum number of frames per event/lidar revolution */
-	int *ordinal = new int [maxFrames];
-	int *fileSize = new int [maxFrames];
-	int *cpuPhase = new int [maxFrames];
-    int *shutter = new int [maxFrames];
-    int *gain = new int [maxFrames];
-    int *exposure = new int [maxFrames];
-	int *frameCounter = new int [maxFrames];
+	unsigned int *ordinal = new unsigned int [maxFrames];
+	unsigned int *fileSize = new unsigned int [maxFrames];
+	unsigned int *cpuPhase = new unsigned int [maxFrames];
+    unsigned int *shutter = new unsigned int [maxFrames];
+	unsigned int *gain = new unsigned int [maxFrames];
+	unsigned int *exposure = new unsigned int [maxFrames];
+	unsigned int *frameCounter = new unsigned int [maxFrames];
 	uint64_t *sensorTimestamp = new uint64_t [maxFrames];
 	tree->Branch("nFrames", &nFrames, "nFrames/I");
 	tree->Branch("daqTime", daqTime, "daqTime[nFrames]/l"); /* same as lidar */
-	tree->Branch("ordinal", ordinal, "ordinal[nFrames]/I");
-	tree->Branch("frameCounter", frameCounter, "frameCounter[nFrames]/I");
-	tree->Branch("fileSize", fileSize, "fileSize[nFrames]/I");
-	tree->Branch("cpuPhase", cpuPhase, "cpuPhase[nFrames]/I");
-	tree->Branch("sensorTimestamp", sensorTimestamp, "sensorTimestamp[nFrames]/l");
-    tree->Branch("shutter", shutter, "shutter[nFrames]/I");
-    tree->Branch("gain", gain, "gain[nFrames]/I");
-    tree->Branch("exposure", exposure, "exposure[nFrames]/I");
+	tree->Branch("ordinal", ordinal, "ordinal[nFrames]/i");
+	tree->Branch("frameCounter", frameCounter, "frameCounter[nFrames]/i");
+	tree->Branch("fileSize", fileSize, "fileSize[nFrames]/i");
+	tree->Branch("cpuPhase", cpuPhase, "cpuPhase[nFrames]/i");
+	tree->Branch("sensorTimestamp", sensorTimestamp, "sensorTimestamp[nFrames]/i");
+    tree->Branch("shutter", shutter, "shutter[nFrames]/i");
+    tree->Branch("gain", gain, "gain[nFrames]/i");
+    tree->Branch("exposure", exposure, "exposure[nFrames]/i");
 
     TTree *treeImu = new TTree("imu", "imu");
     tree = treeImu;
@@ -112,13 +112,13 @@ int main(int argc, char **argv) {
 		readFieldFromCsv(line, 7, shutterStr, sizeof(shutterStr));
 		readFieldFromCsv(line, 8, gainStr, sizeof(gainStr));
 		readFieldFromCsv(line, 9, exposureStr, sizeof(exposureStr));
-		sscanf(line, "%lu", &sensorTimestamp[0]);
-		sscanf(line, "%d", &ordinal[0]);
-		sscanf(line, "%d", &frameCounter[0]);
-		sscanf(line, "%d", &shutter[0]);
-		sscanf(line, "%d", &gain[0]);
-		sscanf(line, "%d", &exposure[0]);
-		printf("timestamp=%lu ord=%d fc=%d sh=%d gain=%d exp=%d\n", sensorTimestamp[0], ordinal[0], frameCounter[0], shutter[0], gain[0], exposure[0]);
+		sscanf(sensorTimestampStr, "%lu", &sensorTimestamp[0]);
+		sscanf(ordinalStr, "%d", &ordinal[0]);
+		sscanf(frameCounterStr, "%d", &frameCounter[0]);
+		sscanf(shutterStr, "%d", &shutter[0]);
+		sscanf(gainStr, "%d", &gain[0]);
+		sscanf(exposureStr, "%d", &exposure[0]);
+		printf("timestamp=%lu ord=%u fc=%d sh=%u gain=%u exp=%u\n", sensorTimestamp[0], ordinal[0], frameCounter[0], shutter[0], gain[0], exposure[0]);
     }
 
 	delete [] daqTime;
