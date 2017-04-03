@@ -17,6 +17,7 @@
 #include "lidar.h"
 #include "pcapreader.h"
 #include "gpsReferenceWeekConverter.h"
+#include "utils.h"
 
 using namespace std;
 
@@ -33,6 +34,7 @@ int main(int argc, char **argv) {
 	}
 
     wdir = "/Users/jsvirzi/Documents/rigData/26-03-2017-05-16-48-6661";
+	wdir = "/home/jsvirzi/projects/data/rig/26-03-2017-05-22-26-930";
 
 	TTree *treeLidar = new TTree("lidar", "lidar");
 
@@ -61,6 +63,8 @@ int main(int argc, char **argv) {
 	tree->Branch("phi", phi, "phi[nLidarPoints]/F");
 
 	TTree *treeVideo = new TTree("video", "video");
+
+	/* setup video */
 	tree = treeVideo;
 	int nFrames;
 	const int maxFrames = 16; /* maximum number of frames per event/lidar revolution */
@@ -70,9 +74,12 @@ int main(int argc, char **argv) {
     int *shutter = new int [maxFrames];
     int *gain = new int [maxFrames];
     int *exposure = new int [maxFrames];
+	int *frameCounter = new int [maxFrames];
 	uint64_t *sensorTimestamp = new uint64_t [maxFrames];
+	tree->Branch("nFrames", &nFrames, "nFrames/I");
 	tree->Branch("daqTime", daqTime, "daqTime[nFrames]/l"); /* same as lidar */
 	tree->Branch("ordinal", ordinal, "ordinal[nFrames]/I");
+	tree->Branch("frameCounter", frameCounter, "frameCounter[nFrames]/I");
 	tree->Branch("fileSize", fileSize, "fileSize[nFrames]/I");
 	tree->Branch("cpuPhase", cpuPhase, "cpuPhase[nFrames]/I");
 	tree->Branch("sensorTimestamp", sensorTimestamp, "sensorTimestamp[nFrames]/l");
@@ -85,12 +92,33 @@ int main(int argc, char **argv) {
     int nImuPoints;
     const int maxImuPoints = 100;
 
+	ssize_t nRead;
     size_t maxLineDim = 1024;
-    char **line = 0;
-    ifile = wdir + "video-0.csv";
+    char *line = new char [maxLineDim];
+    ifile = wdir + "/video-0.csv";
     FILE *fp = fopen(ifile.c_str(), "r");
-    while(getline(line, &maxLineDim, fp)) {
+	char frameCounterStr[64];
+	char ordinalStr[64];
+	char sensorTimestampStr[64];
+	char shutterStr[32];
+	char exposureStr[32];
+	char gainStr[32];
+	nFrames = 1;
+    while((nRead = getline(&line, &maxLineDim, fp)) != -1) {
         printf("line = [%s]\n", line);
+		readFieldFromCsv(line, 4, sensorTimestampStr, sizeof(sensorTimestampStr));
+		readFieldFromCsv(line, 5, ordinalStr, sizeof(ordinalStr));
+		readFieldFromCsv(line, 6, frameCounterStr, sizeof(frameCounterStr));
+		readFieldFromCsv(line, 7, shutterStr, sizeof(shutterStr));
+		readFieldFromCsv(line, 8, gainStr, sizeof(gainStr));
+		readFieldFromCsv(line, 9, exposureStr, sizeof(exposureStr));
+		sscanf(line, "%lu", &sensorTimestamp[0]);
+		sscanf(line, "%d", &ordinal[0]);
+		sscanf(line, "%d", &frameCounter[0]);
+		sscanf(line, "%d", &shutter[0]);
+		sscanf(line, "%d", &gain[0]);
+		sscanf(line, "%d", &exposure[0]);
+		printf("timestamp=%lu ord=%d fc=%d sh=%d gain=%d exp=%d\n", sensorTimestamp[0], ordinal[0], frameCounter[0], shutter[0], gain[0], exposure[0]);
     }
 
 	delete [] daqTime;

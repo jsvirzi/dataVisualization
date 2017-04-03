@@ -2,6 +2,8 @@
 // Created by jsvirzi on 4/2/17.
 //
 
+#include <string.h>
+
 bool readFieldFromCsv(const char *line, int field, char *res, int max) {
     int i, pos = 0, len = strlen(line), nCommas = 0, beginPos = 0, endPos = -1;
     for(pos=0;pos<=len;++pos) {

@@ -15,8 +15,8 @@ include_directories(/usr/local/include)
 
 # link_libraries(${OPENCVLIBS})
 
-link_libraries(-L/usr/local/lib -lopencv_shape -lopencv_stitching -lopencv_objdetect -lopencv_superres -lopencv_videostab -lopencv_calib3d -lopencv_features2d -lopencv_highgui -lopencv_videoio -lopencv_imgcodecs -lopencv_video -lopencv_photo -lopencv_ml -lopencv_imgproc -lopencv_flann -lopencv_core)
+# link_libraries(-L/usr/local/lib -lopencv_shape -lopencv_stitching -lopencv_objdetect -lopencv_superres -lopencv_videostab -lopencv_calib3d -lopencv_features2d -lopencv_highgui -lopencv_videoio -lopencv_imgcodecs -lopencv_video -lopencv_photo -lopencv_ml -lopencv_imgproc -lopencv_flann -lopencv_core)
 link_libraries(-L/home/jsvirzi/root/lib -lCore -lCint -lRIO -lNet -lHist -lGraf -lGraf3d -lGpad -lTree -lRint -lPostscript -lMatrix -lPhysics -lMathCore -lThread -pthread -lm -ldl -rdynamic)
 
-add_executable(dataVisualization ${SOURCE_FILES} src/pcapreader.cpp.cpp)
-add_executable(daqToRoot src/daqToRoot.cpp src/lidar.cpp src/daqToRoot.cpp src/pcapreader.cpp.cpp)
+#add_executable(dataVisualization ${SOURCE_FILES} src/pcapreader.cpp.cpp)
+add_executable(daqToRoot src/daqToRoot.cpp src/lidar.cpp src/daqToRoot.cpp src/pcapreader.cpp src/utils.cpp)
