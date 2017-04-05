@@ -37,6 +37,7 @@ int main(int argc, char **argv) {
 	wdir = "/home/jsvirzi/projects/data/rig/26-03-2017-05-22-26-930";
 	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-05-53-33";
 	wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-07-32-04";
+	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-07-32-04";
 
 	ofile = wdir + "/daq.root";
 	TFile fpOut(ofile.c_str(), "recreate");
@@ -45,22 +46,21 @@ int main(int argc, char **argv) {
 
 	/* setup lidar */
 	TTree *tree = treeLidar;
-	const int LidarBlocks = 24;
 	const int LidarRevolutionsPerSecond = 20;
 	const int MaxLidarPacketsPerSecond = 754;
 	int maxLidarPacketsPerEvent = (MaxLidarPacketsPerSecond + LidarRevolutionsPerSecond - 1) / LidarRevolutionsPerSecond;
-	int nLidar, maxLidarPoints = nLidarChannels * nLidarBlocks * 2 * maxLidarPacketsPerEvent;
-	uint64_t evtTime;
+	int maxLidarPoints = nLidarChannels * nLidarBlocks * 2 * maxLidarPacketsPerEvent;
+//	uint64_t evtTime;
 	uint64_t *daqTime = new uint64_t [maxLidarPoints];
 	int *channel = new int [maxLidarPoints];
-//	int *azimuth = new int [maxLidarPoints];
 	int *intensity = new int [maxLidarPoints];
 	double *R = new double [maxLidarPoints];
 	double *theta = new double [maxLidarPoints];
 	double *phi = new double [maxLidarPoints];
+	double *dphi = new double [maxLidarPoints];
 	int nLidarPoints;
 	tree->Branch("nLidarPoints", &nLidarPoints, "nLidarPoints/I");
-	tree->Branch("evtTime", &evtTime, "evtTime/l");
+//	tree->Branch("evtTime", &evtTime, "evtTime/l");
 	tree->Branch("daqTime", daqTime, "daqTime[nLidarPoints]/l");
 	tree->Branch("channel", channel, "channel[nLidarPoints]/I");
 //	tree->Branch("azimuth", azimuth, "azimuth[nLidarPoints]/I");
@@ -68,16 +68,18 @@ int main(int argc, char **argv) {
 	tree->Branch("R", R, "R[nLidarPoints]/D");
 	tree->Branch("theta", theta, "theta[nLidarPoints]/D");
 	tree->Branch("phi", phi, "phi[nLidarPoints]/D");
+	tree->Branch("dphi", dphi, "dphi[nLidarPoints]/D");
 
 	lfile = wdir + "/lidar.pcap";
 	PcapReader pcapReader(lfile.c_str());
 	int lidarPacketType;
 	void *p;
 
-	bool firstEvent = true, awaitingEventTrigger = true;
-	int nDataPackets = 0, nPositionPackets = 0, pointIndex = 0;
+	bool newEvent = false;
+	int nDataPackets = 0, nPositionPackets = 0;
 	uint32_t previousTimestamp = 0, timestamp = 0;
 	time_t timeBase = 0;
+	double phiPrevious = 0.0;
 	while((lidarPacketType = pcapReader.readPacket(&p)) != pcapReader.LidarPacketTypes) {
 		if(lidarPacketType == pcapReader.TypeLidarDataPacket) {
 			LidarDataPacket *lidarDataPacket = (LidarDataPacket *)p;
@@ -85,35 +87,32 @@ int main(int argc, char **argv) {
 
 			/* read data packet and convert data */
 			int nPoints = convertLidarPacketToLidarData(lidarDataPacket, lidarData, timeBase, -M_PI, M_PI);
-			double phiFirstPoint = lidarData[0].phi;
-			bool firstBlockInEvent = (0.0 <= phiFirstPoint) && (phiFirstPoint <= radiansPerBlock * 0.9);
 
-			if(firstEvent) {
-				if(firstBlockInEvent) {
-					firstEvent = false; /* finally first event is over */
-				} else {
-					continue;
-				}
-			}
-
-			if(firstBlockInEvent) {
-				if(nLidarPoints > 0) {
-					treeLidar->Fill();
-				}
-				nLidarPoints = 0;
-				pointIndex = 0;
-			}
-
-			for(i=0;i<nPoints;++i,++pointIndex) {
+			for(i=0;i<nPoints;++i) {
 				LidarData *p = &lidarData[i];
-				daqTime[pointIndex] = p->timestamp;
-				channel[pointIndex] = p->channel;
-				intensity[pointIndex] = p->intensity;
-				R[pointIndex] = p->R;
-				theta[pointIndex] = p->theta;
-				phi[pointIndex] = p->phi;
+				if(newEvent == false) {
+					if(p->phi >= 0.0) {
+						if(nLidarPoints > 0) {
+							treeLidar->Fill();
+						}
+						nLidarPoints = 0;
+						newEvent = true;
+					}
+				} else {
+					if(p->phi < 0.0) {
+						newEvent = false;
+					}
+				}
+				daqTime[nLidarPoints] = p->timestamp;
+				channel[nLidarPoints] = p->channel;
+				intensity[nLidarPoints] = p->intensity;
+				R[nLidarPoints] = p->R;
+				theta[nLidarPoints] = p->theta;
+				phi[nLidarPoints] = p->phi;
+				dphi[nLidarPoints] = p->phi - phiPrevious;
+				phiPrevious = p->phi;
+				++nLidarPoints;
 			}
-			nLidarPoints += nPoints;
 
 			++nDataPackets;
 		} else if (lidarPacketType == pcapReader.TypeLidarPositionPacket) {
