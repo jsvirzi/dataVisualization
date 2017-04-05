@@ -35,6 +35,8 @@ int main(int argc, char **argv) {
 
     wdir = "/Users/jsvirzi/Documents/rigData/26-03-2017-05-16-48-6661";
 	wdir = "/home/jsvirzi/projects/data/rig/26-03-2017-05-22-26-930";
+	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-05-53-33";
+	wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-07-32-04";
 
 	ofile = wdir + "/daq.root";
 	TFile fpOut(ofile.c_str(), "recreate");
@@ -48,22 +50,92 @@ int main(int argc, char **argv) {
 	const int MaxLidarPacketsPerSecond = 754;
 	int maxLidarPacketsPerEvent = (MaxLidarPacketsPerSecond + LidarRevolutionsPerSecond - 1) / LidarRevolutionsPerSecond;
 	int nLidar, maxLidarPoints = nLidarChannels * nLidarBlocks * 2 * maxLidarPacketsPerEvent;
+	uint64_t evtTime;
 	uint64_t *daqTime = new uint64_t [maxLidarPoints];
 	int *channel = new int [maxLidarPoints];
-	int *azimuth = new int [maxLidarPoints];
+//	int *azimuth = new int [maxLidarPoints];
 	int *intensity = new int [maxLidarPoints];
-	float *R = new float [maxLidarPoints];
-	float *theta = new float [maxLidarPoints];
-	float *phi = new float [maxLidarPoints];
+	double *R = new double [maxLidarPoints];
+	double *theta = new double [maxLidarPoints];
+	double *phi = new double [maxLidarPoints];
 	int nLidarPoints;
 	tree->Branch("nLidarPoints", &nLidarPoints, "nLidarPoints/I");
+	tree->Branch("evtTime", &evtTime, "evtTime/l");
 	tree->Branch("daqTime", daqTime, "daqTime[nLidarPoints]/l");
 	tree->Branch("channel", channel, "channel[nLidarPoints]/I");
-	tree->Branch("azimuth", azimuth, "azimuth[nLidarPoints]/I");
+//	tree->Branch("azimuth", azimuth, "azimuth[nLidarPoints]/I");
 	tree->Branch("intensity", intensity, "intensity[nLidarPoints]/I");
-	tree->Branch("R", R, "R[nLidarPoints]/F");
-	tree->Branch("theta", theta, "theta[nLidarPoints]/F");
-	tree->Branch("phi", phi, "phi[nLidarPoints]/F");
+	tree->Branch("R", R, "R[nLidarPoints]/D");
+	tree->Branch("theta", theta, "theta[nLidarPoints]/D");
+	tree->Branch("phi", phi, "phi[nLidarPoints]/D");
+
+	lfile = wdir + "/lidar.pcap";
+	PcapReader pcapReader(lfile.c_str());
+	int lidarPacketType;
+	void *p;
+
+	bool firstEvent = true, awaitingEventTrigger = true;
+	int nDataPackets = 0, nPositionPackets = 0, pointIndex = 0;
+	uint32_t previousTimestamp = 0, timestamp = 0;
+	time_t timeBase = 0;
+	while((lidarPacketType = pcapReader.readPacket(&p)) != pcapReader.LidarPacketTypes) {
+		if(lidarPacketType == pcapReader.TypeLidarDataPacket) {
+			LidarDataPacket *lidarDataPacket = (LidarDataPacket *)p;
+			LidarData *lidarData = pcapReader.pointCloud;
+
+			/* read data packet and convert data */
+			int nPoints = convertLidarPacketToLidarData(lidarDataPacket, lidarData, timeBase, -M_PI, M_PI);
+			double phiFirstPoint = lidarData[0].phi;
+			bool firstBlockInEvent = (0.0 <= phiFirstPoint) && (phiFirstPoint <= radiansPerBlock * 0.9);
+
+			if(firstEvent) {
+				if(firstBlockInEvent) {
+					firstEvent = false; /* finally first event is over */
+				} else {
+					continue;
+				}
+			}
+
+			if(firstBlockInEvent) {
+				if(nLidarPoints > 0) {
+					treeLidar->Fill();
+				}
+				nLidarPoints = 0;
+				pointIndex = 0;
+			}
+
+			for(i=0;i<nPoints;++i,++pointIndex) {
+				LidarData *p = &lidarData[i];
+				daqTime[pointIndex] = p->timestamp;
+				channel[pointIndex] = p->channel;
+				intensity[pointIndex] = p->intensity;
+				R[pointIndex] = p->R;
+				theta[pointIndex] = p->theta;
+				phi[pointIndex] = p->phi;
+			}
+			nLidarPoints += nPoints;
+
+			++nDataPackets;
+		} else if (lidarPacketType == pcapReader.TypeLidarPositionPacket) {
+			LidarPositionPacket *lidarPositionPacket = (LidarPositionPacket *)p;
+			char nmeaSentence[sizeof(lidarPositionPacket->nmeaSentence) + 1];
+			snprintf(nmeaSentence, sizeof(nmeaSentence), "%s", lidarPositionPacket->nmeaSentence);
+			previousTimestamp = timestamp;
+			timestamp = lidarPositionPacket->timestamp[3];
+			timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[2];
+			timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[1];
+			timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[0];
+			++nPositionPackets;
+			unsigned char valid = lidarPositionPacket->timestamp[4];
+			char timeStr[32], dateStr[32];
+			readFieldFromCsv(nmeaSentence, 1, timeStr, sizeof(timeStr));
+			readFieldFromCsv(nmeaSentence, 9, dateStr, sizeof(dateStr));
+			timeBase = hourTimeBaseInSeconds(dateStr, timeStr);
+			printf("NMEA=[%s]. TIME(0x%2.2x)=0x%8.8x=%d. deltaT=%d. D=%d/P=%d. DATE/TIME=[%s/%s]\n",
+				   nmeaSentence, valid, timestamp, timestamp, timestamp - previousTimestamp, nDataPackets,
+				   nPositionPackets, timeStr, dateStr);
+		}
+	}
 
 	TTree *treeVideo = new TTree("video", "video");
 
@@ -155,7 +227,7 @@ int main(int argc, char **argv) {
 
 	delete [] daqTime;
 	delete [] channel;
-	delete [] azimuth;
+//	delete [] azimuth;
 	delete [] intensity;
 	delete [] R;
 	delete [] theta;

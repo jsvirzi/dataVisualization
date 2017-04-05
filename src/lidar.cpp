@@ -65,11 +65,6 @@ static PositionPacketHeader dummyPositionPacketHeader = {
 void saveLidarDataPacket(LidarDataPacket *lidarDataPacket, int fd);
 void saveLidarPositionPacket(LidarPositionPacket *lidarPositionPacket, int fd);
 
-const double cycleTimeBetweenFirings = 2.304;  // microseconds
-const double rechargePeriod = 18.43;           // microseconds
-const double cycleTimeBetweenBlocks = 55.296; // microseconds. according to doc, calculations = 55.294
-const double distanceUnit = 0.002;             // 2 millimeters
-const int VLP16Device = 0x22;
 const double laserPolarAngle[nLidarChannels] = {
 	-15.0 * M_PI / 180.0, 1.0 * M_PI / 180.0,   -13.0 * M_PI / 180.0,
 	3.0 * M_PI / 180.0,   -11.0 * M_PI / 180.0, 5.0 * M_PI / 180.0,
@@ -108,8 +103,6 @@ int convertLidarPacketToLidarData(LidarDataPacket *lidarDataPacket, LidarData *l
 	}
 	interpolatedDeltaAzimuth = 0.5 * sqrt(interpolatedDeltaAzimuth / (nLidarBlocks - 1));
 
-	double omega = 2.0 * M_PI * 20.0;  // TODO assumes 20Hz
-
 	int sequenceIndex = 0;
 	for (iBlock = 0; iBlock < nLidarBlocks; ++iBlock) {
 		LidarDataBlock *lidarDataBlock = &lidarDataPacket->dataBlock[iBlock];
@@ -118,13 +111,13 @@ int convertLidarPacketToLidarData(LidarDataPacket *lidarDataPacket, LidarData *l
 			LidarChannelDatum *datum = &lidarDataBlock->data[iChannel];
 			double a = distanceUnit * datum->distance[1];
 			lidarData->R = 256.0 * a + distanceUnit * datum->distance[0];
-			lidarData->phi = azimuth0 + iChannel * cycleTimeBetweenFirings * omega * 1.0e-6;
+			lidarData->phi = azimuth0 + iChannel * cycleTimeBetweenFirings * radiansPerMicrosecond;
 			lidarData->theta = laserPolarAngle[iChannel];
 			lidarData->intensity = datum->reflectivity;
 			lidarData->channel = iChannel;
 			lidarData->timestamp = timeBase * 1000000; /* epoch seconds to microseconds */
 			uint64_t daqTimestamp = cycleTimeBetweenBlocks * sequenceIndex + cycleTimeBetweenFirings * iChannel;
-			lidarData->timestamp += daqTimestamp; /* daq timestamp */
+			lidarData->timestamp += daqTimestamp; /* daq timestamp since top of hour */
 			++lidarData;
 			++nPoints;
 		}
@@ -134,13 +127,13 @@ int convertLidarPacketToLidarData(LidarDataPacket *lidarDataPacket, LidarData *l
 			LidarChannelDatum *datum = &lidarDataBlock->data[nLidarChannels + iChannel];
 			double a = distanceUnit * datum->distance[1];
 			lidarData->R = 256.0 * a + distanceUnit * datum->distance[0];
-			lidarData->phi = azimuth0 + iChannel * cycleTimeBetweenFirings * omega * 1.0e-6;
+			lidarData->phi = azimuth0 + iChannel * cycleTimeBetweenFirings * radiansPerMicrosecond;
 			lidarData->theta = laserPolarAngle[iChannel];
 			lidarData->intensity = datum->reflectivity;
 			lidarData->channel = iChannel;
 			lidarData->timestamp = timeBase * 1000000; /* epoch seconds to microseconds */
 			uint64_t daqTimestamp = cycleTimeBetweenBlocks * sequenceIndex + cycleTimeBetweenFirings * iChannel;
-			lidarData->timestamp += daqTimestamp; /* daq timestamp */
+			lidarData->timestamp += daqTimestamp; /* daq timestamp since top of hour */
 			++lidarData;
 			++nPoints;
 		}

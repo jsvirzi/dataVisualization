@@ -3,6 +3,7 @@
 
 #include <inttypes.h>
 #include <pthread.h>
+#include <math.h>
 
 #define nLidarBlocks 12
 
@@ -35,7 +36,7 @@ typedef struct {
 
 typedef struct {
     double R, theta, phi;  // R = distance, phi = azimuth, theta = altitude
-    int intensity, channel, azimuth;
+    int intensity, channel;
     uint64_t timestamp;
 } LidarData;
 
@@ -58,6 +59,15 @@ const int lidarDataPacketSize = 1206;
 const int lidarBlockSize = 100;
 const int lidarDatumSize = 3;
 const int lidarPositionPacketSize = 512;
+
+const int VLP16Device = 0x22;
+const double revolutionsPerMicrosecond = 20.0 * 1.0e-6;
+const double radiansPerMicrosecond = 2.0 * M_PI * revolutionsPerMicrosecond;
+const double cycleTimeBetweenFirings = 2.304;  // microseconds
+const double rechargePeriod = 18.43;           // microseconds
+const double cycleTimeBetweenBlocks = 55.296; // microseconds. according to doc, calculations = 55.294
+const double distanceUnit = 0.002;             // 2 millimeters
+const double radiansPerBlock = cycleTimeBetweenBlocks * 24 * radiansPerMicrosecond; /* 0.1667688 radians at 20Hz */
 
 /*
  * https://wiki.wireshark.org/Development/LibpcapFileFormat

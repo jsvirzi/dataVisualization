@@ -15,6 +15,7 @@
 
 #include "lidar.h"
 #include "pcapreader.h"
+#include "utils.h"
 
 using namespace cv;
 using namespace std;
@@ -116,28 +117,6 @@ int readFloatArrayFromCsv(const char *filename, int srcId, float *x, float *y, f
 #define MaxImu 1000000
 float yawData[MaxImu], pitchData[MaxImu], rollData[MaxImu], sysTimeData[MaxImu], evtTimeData[MaxImu];
 
-time_t hourTimeBaseInSeconds(const char *dateStr, const char *timeStr) {
-	struct tm t;
-	memset(&t, 0, sizeof(struct tm));
-	char str[3];
-	str[2] = 0;
-	str[0] = dateStr[0];
-	str[1] = dateStr[1];
-	sscanf(str, "%02d", &t.tm_mday);
-	str[0] = dateStr[2];
-	str[1] = dateStr[3];
-	sscanf(str, "%02d", &t.tm_mon);
-	str[0] = dateStr[4];
-	str[1] = dateStr[5];
-	sscanf(str, "%02d", &t.tm_year);
-	t.tm_year += 2000; /* 2017 comes as 17 */
-	str[0] = timeStr[0];
-	str[1] = timeStr[1];
-	sscanf(str, "%02d", &t.tm_hour);
-	time_t seconds = mktime(&t);
-	return seconds;
-}
-
 int main(int argc, char **argv) {
 
 	int i, frameBufferSize = 8, skip = 0;
@@ -159,6 +138,8 @@ int main(int argc, char **argv) {
     sfile = "/home/jsvirzi/projects/mapping/data/gpsimu.root";
     /*** from sunday ***/
     wdir = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26";
+    wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-05-53-33";
+    wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-07-32-04";
     // sfile = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26/gpsimu.root";
     sfile = wdir + "/gpsimu.root";
     lfile = wdir + "/lidar.pcap";
