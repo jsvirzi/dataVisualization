@@ -37,7 +37,7 @@ int main(int argc, char **argv) {
 	wdir = "/home/jsvirzi/projects/data/rig/26-03-2017-05-22-26-930";
 	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-05-53-33";
 	wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-07-32-04";
-	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-07-32-04";
+//	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-07-32-04";
 
 	ofile = wdir + "/daq.root";
 	TFile fpOut(ofile.c_str(), "recreate");
@@ -58,8 +58,9 @@ int main(int argc, char **argv) {
 	double *theta = new double [maxLidarPoints];
 	double *phi = new double [maxLidarPoints];
 	double *dphi = new double [maxLidarPoints];
-	int nLidarPoints;
+	int nLidarPoints, eventId = 0;
 	tree->Branch("nLidarPoints", &nLidarPoints, "nLidarPoints/I");
+	tree->Branch("eventId", &eventId, "eventId/I");
 //	tree->Branch("evtTime", &evtTime, "evtTime/l");
 	tree->Branch("daqTime", daqTime, "daqTime[nLidarPoints]/l");
 	tree->Branch("channel", channel, "channel[nLidarPoints]/I");
@@ -80,6 +81,7 @@ int main(int argc, char **argv) {
 	uint32_t previousTimestamp = 0, timestamp = 0;
 	time_t timeBase = 0;
 	double phiPrevious = 0.0;
+	LidarData newDatum, oldDatum;
 	while((lidarPacketType = pcapReader.readPacket(&p)) != pcapReader.LidarPacketTypes) {
 		if(lidarPacketType == pcapReader.TypeLidarDataPacket) {
 			LidarDataPacket *lidarDataPacket = (LidarDataPacket *)p;
@@ -97,6 +99,7 @@ int main(int argc, char **argv) {
 						}
 						nLidarPoints = 0;
 						newEvent = true;
+						++eventId;
 					}
 				} else {
 					if(p->phi < 0.0) {
@@ -108,8 +111,13 @@ int main(int argc, char **argv) {
 				intensity[nLidarPoints] = p->intensity;
 				R[nLidarPoints] = p->R;
 				theta[nLidarPoints] = p->theta;
-				phi[nLidarPoints] = p->phi;
-				dphi[nLidarPoints] = p->phi - phiPrevious;
+				phi[nLidarPoints] = asin(sin(p->phi));
+				dphi[nLidarPoints] = asin(sin(p->phi - phiPrevious));
+				newDatum = *p;
+				if(dphi[nLidarPoints] > 0.5) {
+					printf("dphi=%f = %f - %f\n", dphi[nLidarPoints], phi[nLidarPoints], phiPrevious);
+				}
+				oldDatum = newDatum;
 				phiPrevious = p->phi;
 				++nLidarPoints;
 			}
@@ -140,28 +148,21 @@ int main(int argc, char **argv) {
 
 	/* setup video */
 	tree = treeVideo;
-	int nFrames;
-	const int maxFrames = 16; /* maximum number of frames per event/lidar revolution */
-	unsigned int *ordinal = new unsigned int [maxFrames];
-	unsigned int *fileSize = new unsigned int [maxFrames];
-	unsigned int *cpuPhase = new unsigned int [maxFrames];
-    unsigned int *shutter = new unsigned int [maxFrames];
-	unsigned int *gain = new unsigned int [maxFrames];
-	unsigned int *exposure = new unsigned int [maxFrames];
-	unsigned int *frameCounter = new unsigned int [maxFrames];
-	uint64_t *sensorTimestamp = new uint64_t [maxFrames];
-	uint64_t deltaSensorTimestamp;
+	int nFrames, fileSize, maxJpegFileSize = 1024 * 1024;
+	unsigned int ordinal, cpuPhase, shutter, gain, exposure, frameCounter;
+	unsigned char *frameData = new unsigned char [maxJpegFileSize];
+	uint64_t sensorTimestamp, deltaSensorTimestamp;
 	tree->Branch("nFrames", &nFrames, "nFrames/I");
-	tree->Branch("daqTime", daqTime, "daqTime[nFrames]/l"); /* same as lidar */
-	tree->Branch("ordinal", ordinal, "ordinal[nFrames]/i");
-	tree->Branch("frameCounter", frameCounter, "frameCounter[nFrames]/i");
-	tree->Branch("fileSize", fileSize, "fileSize[nFrames]/i");
-	tree->Branch("cpuPhase", cpuPhase, "cpuPhase[nFrames]/i");
-	tree->Branch("sensorTimestamp", sensorTimestamp, "sensorTimestamp[nFrames]/l");
+	tree->Branch("fileSize", &fileSize, "fileSize/i");
+	tree->Branch("ordinal", &ordinal, "ordinal/i");
+	tree->Branch("frameCounter", &frameCounter, "frameCounter/i");
+	tree->Branch("cpuPhase", &cpuPhase, "cpuPhase/i");
+	tree->Branch("sensorTimestamp", &sensorTimestamp, "sensorTimestamp/l");
 	tree->Branch("deltaSensorTimestamp", &deltaSensorTimestamp, "deltaSensorTimestamp/l");
-    tree->Branch("shutter", shutter, "shutter[nFrames]/i");
-    tree->Branch("gain", gain, "gain[nFrames]/i");
-    tree->Branch("exposure", exposure, "exposure[nFrames]/i");
+    tree->Branch("shutter", &shutter, "shutter/i");
+    tree->Branch("gain", &gain, "gain/i");
+    tree->Branch("exposure", &exposure, "exposure/i");
+	tree->Branch("data", frameData, "data[fileSize]/b");
 
     TTree *treeImu = new TTree("imu", "imu");
     tree = treeImu;
@@ -186,7 +187,8 @@ int main(int argc, char **argv) {
 	char shutterStr[32];
 	char exposureStr[32];
 	char gainStr[32];
-	bool filesOk = true;
+	char filename[128];
+	bool filesOk = true, saveVideoFiles = true;
 	deltaSensorTimestamp = 0;
 	uint64_t previousSensorTimestamp = 0;
 	while(filesOk) {
@@ -194,26 +196,38 @@ int main(int argc, char **argv) {
 			nFrames = 1;
 			if ((nRead = getline(&line, &maxLineDim, fp[i])) != -1) {
 				printf("line = [%s]\n", line);
+				readFieldFromCsv(line, 1, filename, sizeof(filename));
 				readFieldFromCsv(line, 4, sensorTimestampStr, sizeof(sensorTimestampStr));
 				readFieldFromCsv(line, 5, ordinalStr, sizeof(ordinalStr));
 				readFieldFromCsv(line, 6, frameCounterStr, sizeof(frameCounterStr));
 				readFieldFromCsv(line, 7, shutterStr, sizeof(shutterStr));
 				readFieldFromCsv(line, 8, gainStr, sizeof(gainStr));
 				readFieldFromCsv(line, 9, exposureStr, sizeof(exposureStr));
-				sscanf(sensorTimestampStr, "%lu", &sensorTimestamp[0]);
-				sscanf(ordinalStr, "%d", &ordinal[0]);
-				sscanf(frameCounterStr, "%d", &frameCounter[0]);
-				sscanf(shutterStr, "%d", &shutter[0]);
-				sscanf(gainStr, "%d", &gain[0]);
-				sscanf(exposureStr, "%d", &exposure[0]);
-				cpuPhase[0] = i;
+				sscanf(sensorTimestampStr, "%lu", &sensorTimestamp);
+				sscanf(ordinalStr, "%d", &ordinal);
+				sscanf(frameCounterStr, "%d", &frameCounter);
+				sscanf(shutterStr, "%d", &shutter);
+				sscanf(gainStr, "%d", &gain);
+				sscanf(exposureStr, "%d", &exposure);
+				if(saveVideoFiles) {
+					std::string vfile = wdir + "/";
+					vfile += filename;
+					FILE *fp = fopen(vfile.c_str(), "r");
+					fseek(fp, 0L, SEEK_END);
+					fileSize = ftell(fp);
+					rewind(fp);
+					fileSize = fread(frameData, sizeof(unsigned char), maxJpegFileSize, fp);
+				} else {
+					fileSize = 0;
+				}
+				cpuPhase = i;
 				if(previousSensorTimestamp == 0) {
 					deltaSensorTimestamp = 0;
 				} else {
-					deltaSensorTimestamp = sensorTimestamp[0] - previousSensorTimestamp;
+					deltaSensorTimestamp = sensorTimestamp - previousSensorTimestamp;
 				}
-				previousSensorTimestamp = sensorTimestamp[0];
-				printf("timestamp=%lu ord=%u fc=%d sh=%u gain=%u exp=%u\n", sensorTimestamp[0], ordinal[0], frameCounter[0], shutter[0], gain[0], exposure[0]);
+				previousSensorTimestamp = sensorTimestamp;
+				printf("timestamp=%lu ord=%u fc=%d sh=%u gain=%u exp=%u\n", sensorTimestamp, ordinal, frameCounter, shutter, gain, exposure);
 				treeVideo->Fill();
 			} else {
 				filesOk = false;
