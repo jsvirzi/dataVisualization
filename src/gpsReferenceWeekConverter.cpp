@@ -1,6 +1,6 @@
-//
-// Created by jsvirzi on 4/2/17.
-//
+#include <time.h>
+#include <stdint.h>
+#include <string.h>
 
 /* this is brute force calculated / entered by hand. it works for 2017 */
 
@@ -69,6 +69,7 @@ uint64_t secondsAtStartOfReferenceWeek(int week) {
     int index = week - 1930;
     if(referenceWeeksToSimpleDate[index].gpsWeek != week) return 0; /* ensure consistency */
     struct tm t;
+    memset(&t, 0, sizeof(t));
     t.tm_mday = referenceWeeksToSimpleDate[index].day;
     t.tm_mon = referenceWeeksToSimpleDate[index].month;
     t.tm_year = referenceWeeksToSimpleDate[index].year;

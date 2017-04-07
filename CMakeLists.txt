@@ -19,4 +19,4 @@ link_libraries(-L/usr/local/lib -lopencv_shape -lopencv_stitching -lopencv_objde
 link_libraries(-L/home/jsvirzi/root/lib -lCore -lCint -lRIO -lNet -lHist -lGraf -lGraf3d -lGpad -lTree -lRint -lPostscript -lMatrix -lPhysics -lMathCore -lThread -pthread -lm -ldl -rdynamic)
 
 add_executable(dataVisualization src/main.cpp src/lidar.cpp src/pcapreader.cpp src/utils.cpp)
-add_executable(daqToRoot src/daqToRoot.cpp src/lidar.cpp src/daqToRoot.cpp src/pcapreader.cpp src/utils.cpp)
+add_executable(daqToRoot src/daqToRoot.cpp src/lidar.cpp src/daqToRoot.cpp src/pcapreader.cpp src/utils.cpp src/gpsReferenceWeekConverter.cpp)
