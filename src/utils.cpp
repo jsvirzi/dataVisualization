@@ -5,6 +5,36 @@
 #include <string.h>
 #include <time.h>
 #include <stdio.h>
+#include <cstdint>
+
+#include "utils.h"
+
+double readDoubleFromCsv(const char *line, int field) {
+    char str[32];
+    bool status = readFieldFromCsv(line, field, str, sizeof(str));
+    if(status == false) return InvalidDouble;
+    double x;
+    sscanf(str, "%lf", &x);
+    return x;
+}
+
+int readIntFromCsv(const char *line, int field) {
+    char str[32];
+    bool status = readFieldFromCsv(line, field, str, sizeof(str));
+    if(status == false) return InvalidInt;
+    int x;
+    sscanf(str, "%d", &x);
+    return x;
+}
+
+int readUint64FromCsv(const char *line, int field) {
+    char str[32];
+    bool status = readFieldFromCsv(line, field, str, sizeof(str));
+    if(status == false) return InvalidInt;
+    uint64_t x;
+    sscanf(str, "%lu", &x);
+    return x;
+}
 
 bool readFieldFromCsv(const char *line, int field, char *res, int max) {
     int i, pos = 0, len = strlen(line), nCommas = 0, beginPos = 0, endPos = -1;

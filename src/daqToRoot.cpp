@@ -39,18 +39,18 @@ int main(int argc, char **argv) {
 	wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-07-32-04";
 //	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-07-32-04";
 
+    /* output file */
 	ofile = wdir + "/daq.root";
 	TFile fpOut(ofile.c_str(), "recreate");
 
-	TTree *treeLidar = new TTree("lidar", "lidar");
+    /*** setup lidar ***/
 
-	/* setup lidar */
+	TTree *treeLidar = new TTree("lidar", "lidar");
 	TTree *tree = treeLidar;
 	const int LidarRevolutionsPerSecond = 20;
 	const int MaxLidarPacketsPerSecond = 754;
 	int maxLidarPacketsPerEvent = (MaxLidarPacketsPerSecond + LidarRevolutionsPerSecond - 1) / LidarRevolutionsPerSecond;
 	int maxLidarPoints = nLidarChannels * nLidarBlocks * 2 * maxLidarPacketsPerEvent;
-//	uint64_t evtTime;
 	uint64_t *daqTime = new uint64_t [maxLidarPoints];
 	int *channel = new int [maxLidarPoints];
 	int *intensity = new int [maxLidarPoints];
@@ -61,10 +61,8 @@ int main(int argc, char **argv) {
 	int nLidarPoints, eventId = 0;
 	tree->Branch("nLidarPoints", &nLidarPoints, "nLidarPoints/I");
 	tree->Branch("eventId", &eventId, "eventId/I");
-//	tree->Branch("evtTime", &evtTime, "evtTime/l");
 	tree->Branch("daqTime", daqTime, "daqTime[nLidarPoints]/l");
 	tree->Branch("channel", channel, "channel[nLidarPoints]/I");
-//	tree->Branch("azimuth", azimuth, "azimuth[nLidarPoints]/I");
 	tree->Branch("intensity", intensity, "intensity[nLidarPoints]/I");
 	tree->Branch("R", R, "R[nLidarPoints]/D");
 	tree->Branch("theta", theta, "theta[nLidarPoints]/D");
@@ -144,9 +142,9 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	TTree *treeVideo = new TTree("video", "video");
+    /*** setup video ***/
 
-	/* setup video */
+	TTree *treeVideo = new TTree("video", "video");
 	tree = treeVideo;
 	int nFrames, fileSize, maxJpegFileSize = 1024 * 1024;
 	unsigned int ordinal, cpuPhase, shutter, gain, exposure, frameCounter;
@@ -164,14 +162,9 @@ int main(int argc, char **argv) {
     tree->Branch("exposure", &exposure, "exposure/i");
 	tree->Branch("data", frameData, "data[fileSize]/b");
 
-    TTree *treeImu = new TTree("imu", "imu");
-    tree = treeImu;
-    int nImuPoints;
-    const int maxImuPoints = 100;
-
-	ssize_t nRead;
+    ssize_t nRead;
     size_t maxLineDim = 1024;
-    char *line = new char [maxLineDim];
+    char *line = (char *)malloc(maxLineDim);
 	FILE *fp[4];
 	ifile = wdir + "/video-0.csv";
     fp[0] = fopen(ifile.c_str(), "r");
@@ -181,12 +174,6 @@ int main(int argc, char **argv) {
     fp[2] = fopen(ifile.c_str(), "r");
 	ifile = wdir + "/video-3.csv";
     fp[3] = fopen(ifile.c_str(), "r");
-	char frameCounterStr[64];
-	char ordinalStr[64];
-	char sensorTimestampStr[64];
-	char shutterStr[32];
-	char exposureStr[32];
-	char gainStr[32];
 	char filename[128];
 	bool filesOk = true, saveVideoFiles = true;
 	deltaSensorTimestamp = 0;
@@ -197,18 +184,14 @@ int main(int argc, char **argv) {
 			if ((nRead = getline(&line, &maxLineDim, fp[i])) != -1) {
 				printf("line = [%s]\n", line);
 				readFieldFromCsv(line, 1, filename, sizeof(filename));
-				readFieldFromCsv(line, 4, sensorTimestampStr, sizeof(sensorTimestampStr));
-				readFieldFromCsv(line, 5, ordinalStr, sizeof(ordinalStr));
-				readFieldFromCsv(line, 6, frameCounterStr, sizeof(frameCounterStr));
-				readFieldFromCsv(line, 7, shutterStr, sizeof(shutterStr));
-				readFieldFromCsv(line, 8, gainStr, sizeof(gainStr));
-				readFieldFromCsv(line, 9, exposureStr, sizeof(exposureStr));
-				sscanf(sensorTimestampStr, "%lu", &sensorTimestamp);
-				sscanf(ordinalStr, "%d", &ordinal);
-				sscanf(frameCounterStr, "%d", &frameCounter);
-				sscanf(shutterStr, "%d", &shutter);
-				sscanf(gainStr, "%d", &gain);
-				sscanf(exposureStr, "%d", &exposure);
+
+                sensorTimestamp = readUint64FromCsv(line, 4);
+                ordinal = readIntFromCsv(line, 5);
+                frameCounter = readIntFromCsv(line, 6);
+                shutter = readIntFromCsv(line, 7);
+                gain = readIntFromCsv(line, 8);
+                exposure = readIntFromCsv(line, 9);
+
 				if(saveVideoFiles) {
 					std::string vfile = wdir + "/";
 					vfile += filename;
@@ -235,12 +218,76 @@ int main(int argc, char **argv) {
 		}
 	}
 
+    fclose(fp[0]);
+    fclose(fp[1]);
+    fclose(fp[2]);
+    fclose(fp[3]);
+
 	fpOut.Write();
 	fpOut.Close();
 
-	delete [] daqTime;
+    /*** setup IMU ***/
+
+    int nImuPoints;
+    const int maxImuPoints = 100;
+    double roll, pitch, yaw, time, lat, lon, deltaTime, previousTime = 0.0;
+    double northVelocity, eastVelocity, upVelocity;    TTree *treeIns = new TTree("ins", "ins");
+    treeIns->Branch("roll", &roll, "roll/D");
+    treeIns->Branch("pitch", &pitch, "pitch/D");
+    treeIns->Branch("northVelocity", &northVelocity, "northVelocity/D");
+    treeIns->Branch("eastVelocity", &eastVelocity, "eastVelocity/D");
+    treeIns->Branch("upVelocity", &upVelocity, "upVelocity/D");
+    treeIns->Branch("yaw", &yaw, "yaw/D");
+    treeIns->Branch("lat", &lat, "lat/D");
+    treeIns->Branch("lon", &lon, "lon/D");
+    treeIns->Branch("time", &time, "time/D");
+    treeIns->Branch("deltaTime", &deltaTime, "deltaTime/D");
+
+    int skip = 0, verbose = 0, debug = 0;
+    line = 0;
+    ifile = wdir + "/imugps.txt";
+    FILE *fpi = fopen(ifile.c_str(), "r");
+    for(i=0;i<skip;++i) { getline(&line, &maxLineDim, fpi); }
+    char msgId[32];
+    while(getline(&line, &maxLineDim, fpi) != -1) {
+        int length = strlen(line);
+        char ch = line[length-1];
+        if((ch == '\n') || (ch == '\r')) { line[length-1] = 0; }
+        readFieldFromCsv(line, 0, msgId, sizeof(msgId));
+        if(strcmp(msgId, "#INSPVAXA") == 0) {
+            if(verbose) { printf("line=[%s]\n", line); }
+
+            time = readDoubleFromCsv(line, 6);
+            lat = readDoubleFromCsv(line, 11);
+            lon = readDoubleFromCsv(line, 12);
+            northVelocity = readDoubleFromCsv(line, 15);
+            eastVelocity = readDoubleFromCsv(line, 16);
+            upVelocity = readDoubleFromCsv(line, 17);
+            roll = readDoubleFromCsv(line, 18);
+            pitch = readDoubleFromCsv(line, 19);
+            yaw = readDoubleFromCsv(line, 20);
+
+            deltaTime = time - previousTime;
+            previousTime = time;
+            treeIns->Fill();
+            if(verbose) {
+                printf("time = %lf deltaTime = %lf lat = %.12lf lon = %.12lf \n", time, deltaTime, lat, lon);
+                printf("velocity = (N=%lf, E=%lf, U=%lf)\n", northVelocity, eastVelocity, upVelocity);
+                printf("roll/pitch/yaw = (%lf, %lf, %lf)\n", roll, pitch, yaw);
+                if(debug) { getchar(); }
+            }
+        }
+    }
+
+    treeLidar->Write();
+    treeIns->Write();
+    treeVideo->Write();
+
+    fpOut.Write();
+    fpOut.Close();
+
+    delete [] daqTime;
 	delete [] channel;
-//	delete [] azimuth;
 	delete [] intensity;
 	delete [] R;
 	delete [] theta;
