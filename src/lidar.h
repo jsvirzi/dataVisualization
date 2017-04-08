@@ -47,7 +47,7 @@ enum {
 } ReturnModes;
 
 double getAzimuth(LidarDataBlock *block);
-int convertLidarPacketToLidarData(LidarDataPacket *lidarPacket, LidarData *lidarData, time_t timeBase, double minAzimuth, double maxAzimuth);
+int convertLidarPacketToLidarData(LidarDataPacket *lidarPacket, LidarData *lidarData, time_t timeBase);
 void saveLidarToText(LidarDataPacket *lidarPacket, const char *filename);
 
 typedef struct { unsigned char header[42]; } LidarPacketHeader;

@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
 
     uint64_t t0; /* this is actual start time of session, expressed as number of microseconds since *the* epoch */
     const uint64_t eventDuration = 50000; /* 50ms = 50000 microseconds */
-    int nEvents, iEvent;
+    int nEvents;
     std::string ofile, wdir;
     bool storeVideo = false, verbose = false, debug = false;
 	for(i=1;i<argc;++i) {
@@ -59,8 +59,10 @@ int main(int argc, char **argv) {
     /* video goes first. by construction, video is fired at precisely t, t + 50ms, t + 100ms, ...
      * where t is actual integral number of seconds since *the* epoch */
 
+    /* I've assumed there is only one image per event. otherwise, the variables become arrays */
     TTree *treeVideo = new TTree("video", "video");
     tree = treeVideo;
+    daqTime = new uint64_t [1];
     int nFrames, fileSize, maxJpegFileSize = 1024 * 1024;
     unsigned int ordinal, cpuPhase, shutter, gain, exposure, frameCounter;
     unsigned char *frameData = new unsigned char [maxJpegFileSize];
@@ -77,6 +79,7 @@ int main(int argc, char **argv) {
     tree->Branch("gain", &gain, "gain/i");
     tree->Branch("exposure", &exposure, "exposure/i");
     tree->Branch("data", frameData, "data[fileSize]/b");
+    tree->Branch("daqTime", daqTime, "daqTime/l");
 
     ssize_t nRead;
     size_t maxLineDim = 1024;
@@ -90,9 +93,10 @@ int main(int argc, char **argv) {
     fp[2] = fopen(filename, "r");
     snprintf(filename, sizeof(filename), "%s/video-3.csv", wdir.c_str());
     fp[3] = fopen(filename, "r");
-    bool filesOk = true, saveVideoFiles = true;
+    bool filesOk = true;
     deltaSensorTimestamp = 0;
     uint64_t previousSensorTimestamp = 0;
+    eventId = 0;
     while(filesOk) {
         for(i=0;i<4;++i) {
             nFrames = 1;
@@ -124,9 +128,10 @@ int main(int argc, char **argv) {
                 } else {
                     deltaSensorTimestamp = sensorTimestamp - previousSensorTimestamp;
                 }
+                ++eventId;
                 previousSensorTimestamp = sensorTimestamp;
-                printf("timestamp=%lu ord=%u fc=%d sh=%u gain=%u exp=%u\n", sensorTimestamp, ordinal, frameCounter, shutter, gain, exposure);
-                treeVideo->Fill();
+                printf("event=%d timestamp=%lu ord=%u fc=%d sh=%u gain=%u exp=%u\n", eventId, sensorTimestamp, ordinal, frameCounter, shutter, gain, exposure);
+                tree->Fill();
             } else {
                 filesOk = false;
             }
@@ -134,6 +139,8 @@ int main(int argc, char **argv) {
     }
 
     tree->Write();
+
+    delete [] daqTime;
 
     nEvents = tree->GetEntries();
 
@@ -155,7 +162,7 @@ int main(int argc, char **argv) {
     daqTime = new uint64_t [maxImuPoints];
     uint64_t endOfEvent; /* event start/stop */
     double roll[maxImuPoints], pitch[maxImuPoints], yaw[maxImuPoints];
-    double time, previousTime = 0.0;
+    double time;
     double northVelocity[maxImuPoints], eastVelocity[maxImuPoints], upVelocity[maxImuPoints];
     double lat[maxImuPoints], lon[maxImuPoints];
     TTree *treeIns = new TTree("ins", "ins");
@@ -175,6 +182,7 @@ int main(int argc, char **argv) {
     int skip = 17, week;
     snprintf(filename, sizeof(filename), "%s/gpsimu.txt", wdir.c_str());
 
+    /* this must be added to gps time to obtain utc time */
 	int gpsTimeUtc = GpsTimeUtc(filename);
 
     FILE *fpi = fopen(filename, "r");
@@ -198,14 +206,14 @@ int main(int argc, char **argv) {
             week = readIntFromCsv(line, 5);
             time = readDoubleFromCsv(line, 6);
             uint64_t microSeconds = (uint64_t) (time * 1.0e6);
-            uint64_t timeOfDatum = secondsAtStartOfReferenceWeek(week) * 1e6 + microSeconds;
+            uint64_t timeOfDatum = (secondsAtStartOfReferenceWeek(week) + gpsTimeUtc) * 1e6 + microSeconds;
             if(timeOfDatum >= endOfEvent) {
+                ++eventId;
                 if(nImuPoints > 0) {
                     tree->Fill();
                     endOfEvent += eventDuration;
                     nImuPoints = 0;
                 }
-                ++eventId;
             }
             daqTime[nImuPoints] = timeOfDatum;
             lat[nImuPoints] = readDoubleFromCsv(line, 11);
@@ -219,7 +227,7 @@ int main(int argc, char **argv) {
             verbose = debug = true;
             if(verbose) {
                 printf("line=[%s]\n", line);
-                printf("time = %lf lat = %.12lf lon = %.12lf \n", timeOfDatum, lat[nImuPoints], lon[nImuPoints]);
+                printf("time = %lu lat = %.12lf lon = %.12lf \n", timeOfDatum, lat[nImuPoints], lon[nImuPoints]);
                 printf("velocity = (N=%lf, E=%lf, U=%lf)\n", northVelocity[nImuPoints], eastVelocity[nImuPoints], upVelocity[nImuPoints]);
                 printf("roll/pitch/yaw = (%lf, %lf, %lf)\n", roll[nImuPoints], pitch[nImuPoints], yaw[nImuPoints]);
                 if(debug) { getchar(); }
@@ -276,7 +284,7 @@ int main(int argc, char **argv) {
 			LidarData *lidarData = pcapReader.pointCloud;
 
 			/* read data packet and convert data */
-			int nPoints = convertLidarPacketToLidarData(lidarDataPacket, lidarData, timeBase, -M_PI, M_PI);
+			int nPoints = convertLidarPacketToLidarData(lidarDataPacket, lidarData, timeBase);
 
 			for(i=0;i<nPoints;++i) {
 				LidarData *p = &lidarData[i];
