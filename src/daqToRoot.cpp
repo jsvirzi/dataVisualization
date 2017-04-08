@@ -45,6 +45,7 @@ int main(int argc, char **argv) {
 	wdir = "/home/jsvirzi/projects/data/rig/26-03-2017-05-22-26-930";
 	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-05-53-33";
 	wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-07-32-04";
+	wdir = "/home/jsvirzi/projects/mapping/data/07-04-2017-06-59-14";
 //	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-07-32-04";
 
     /* output file */
@@ -173,6 +174,9 @@ int main(int argc, char **argv) {
 
     int skip = 17, week;
     snprintf(filename, sizeof(filename), "%s/gpsimu.txt", wdir.c_str());
+
+	int gpsTimeUtc = GpsTimeUtc(filename);
+
     FILE *fpi = fopen(filename, "r");
     if(fpi == 0) {
         printf("unable to open file [%s]\n", filename);
@@ -337,6 +341,8 @@ int main(int argc, char **argv) {
     delete [] R;
     delete [] theta;
     delete [] phi;
+
+    free(line);
 
     /* close out root file */
     fpOut.Write();

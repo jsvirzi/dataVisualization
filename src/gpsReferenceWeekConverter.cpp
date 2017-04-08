@@ -1,6 +1,11 @@
 #include <time.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+#include "utils.h"
 
 /* this is brute force calculated / entered by hand. it works for 2017 */
 
@@ -210,3 +215,77 @@ Dec             2017                 Dec
 
  *
  */
+
+int GpsTimeUtc(const char *filename) {
+    int i, skip = 50;
+    size_t maxLineDim = 1024;
+    FILE *fpi = fopen(filename, "r");
+    bool debug = false, verbose = false;
+    if(fpi == 0) {
+        printf("unable to open file [%s]\n", filename);
+        return -1;
+    }
+
+	int utcHour, utcMins, utcSecs, utcMsecs, gpsWeek, gpsTime;
+	struct tm utcTime;
+	bool trigger = false;
+    char msgId[32];
+    char *line = (char *)malloc(maxLineDim);
+    for(i=0;i<skip;++i) { getline(&line, &maxLineDim, fpi); }
+
+    while(getline(&line, &maxLineDim, fpi) != -1) {
+        int length = strlen(line);
+        char ch = line[length-1];
+        if((ch == '\n') || (ch == '\r')) { line[length-1] = 0; }
+        readFieldFromCsv(line, 0, msgId, sizeof(msgId));
+        if(strcmp(msgId, "#INSPVAXA") == 0) {
+			if(trigger) {
+				gpsWeek = readIntFromCsv(line, 5);
+				gpsTime = readDoubleFromCsv(line, 6);
+				gpsTime = floor(gpsTime);
+				break;
+			}
+        } else if(strcmp(msgId, "$GPRMC") == 0) {
+			char timeStr[32], dateStr[32], str[3];
+			readFieldFromCsv(line, 1, timeStr, sizeof(timeStr));
+			readFieldFromCsv(line, 9, dateStr, sizeof(dateStr));
+			str[2] = 0;
+			str[0] = timeStr[0];
+			str[1] = timeStr[1];
+			sscanf(str, "%2d", &utcHour);
+			str[0] = timeStr[2];
+			str[1] = timeStr[3];
+			sscanf(str, "%2d", &utcMins);
+			str[0] = timeStr[4];
+			str[1] = timeStr[5];
+			sscanf(str, "%2d", &utcSecs);
+			str[0] = timeStr[7];
+			str[1] = timeStr[8];
+			sscanf(str, "%2d", &utcMsecs);
+			if(utcMsecs == 50) {
+				memset(&utcTime, 0, sizeof(struct tm));
+				str[0] = dateStr[0];
+				str[1] = dateStr[1];
+				sscanf(str, "%02d", &utcTime.tm_mday);
+				str[0] = dateStr[2];
+				str[1] = dateStr[3];
+				sscanf(str, "%02d", &utcTime.tm_mon);
+				str[0] = dateStr[4];
+				str[1] = dateStr[5];
+				sscanf(str, "%02d", &utcTime.tm_year);
+				utcTime.tm_year += 2000;
+				utcTime.tm_hour = utcHour;
+				utcTime.tm_min = utcMins;
+				utcTime.tm_sec = utcSecs;
+				trigger = true;
+			}
+        }
+    }
+
+    free(line);
+
+	int gpsSeconds = secondsAtStartOfReferenceWeek(gpsWeek) + gpsTime;
+	int utcSeconds = mktime(&utcTime);
+	int diff = gpsSeconds - utcSeconds;
+	return diff;
+}
