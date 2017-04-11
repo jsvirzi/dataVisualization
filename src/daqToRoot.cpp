@@ -216,7 +216,7 @@ int main(int argc, char **argv) {
             roll[nImuPoints] = readDoubleFromCsv(line, 18);
             pitch[nImuPoints] = readDoubleFromCsv(line, 19);
             yaw[nImuPoints] = readDoubleFromCsv(line, 20);
-            verbose = debug = true;
+            verbose = debug = false;
             if(verbose) {
                 printf("line=[%s]\n", line);
                 printf("time = %lf lat = %.12lf lon = %.12lf \n", timeOfDatum, lat[nImuPoints], lon[nImuPoints]);
@@ -299,7 +299,7 @@ int main(int argc, char **argv) {
 				intensity[nLidarPoints] = p->intensity;
 				R[nLidarPoints] = p->R;
 				theta[nLidarPoints] = p->theta;
-				phi[nLidarPoints] = asin(sin(p->phi));
+				phi[nLidarPoints] = p->phi;
 				dphi[nLidarPoints] = asin(sin(p->phi - phiPrevious));
 				newDatum = *p;
 				if(dphi[nLidarPoints] > 0.5) {

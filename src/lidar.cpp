@@ -176,6 +176,9 @@ double getAzimuth(LidarDataBlock *block) {
 	unsigned char azimuthHi = block->azimuthHi;
 	int azimuthData = azimuthHi;
 	azimuthData = (azimuthData << 8) | azimuthLo;
-	double azimuth = azimuthData * M_PI / 18000.0 - M_PI;  // azimuth is reported in 0.01 degrees. convert to radians
+	double azimuth = azimuthData * M_PI / 18000.0;  // azimuth is reported in 0.01 degrees. convert to radians;
+	if(azimuthData > 18000.0) {
+		azimuth = azimuth - 2 * M_PI;
+	}
 	return azimuth;
 }
