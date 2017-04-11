@@ -79,10 +79,6 @@ int histogramIntensityAzimuth[nLidarChannels][256 * 256];
 void analyzePointCloud(LidarData *data, int nPoints);
 
 int convertLidarPacketToLidarData(LidarDataPacket *lidarDataPacket, LidarData *lidarData, time_t timeBase) {
-	return convertLidarPacketToLidarData(lidarDataPacket, lidarData, timeBase, -M_PI, M_PI);
-}
-
-int convertLidarPacketToLidarData(LidarDataPacket *lidarDataPacket, LidarData *lidarData, time_t timeBase, double minAzimuth, double maxAzimuth) {
 	int iBlock, iChannel, nPoints = 0;
 	double azimuth[nLidarBlocks];
 

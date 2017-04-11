@@ -220,7 +220,6 @@ int GpsTimeUtc(const char *filename) {
     int i, skip = 50;
     size_t maxLineDim = 1024;
     FILE *fpi = fopen(filename, "r");
-    bool debug = false, verbose = false;
     if(fpi == 0) {
         printf("unable to open file [%s]\n", filename);
         return -1;
@@ -282,10 +281,11 @@ int GpsTimeUtc(const char *filename) {
         }
     }
 
+	fclose(fpi);
     free(line);
 
 	int gpsSeconds = secondsAtStartOfReferenceWeek(gpsWeek) + gpsTime;
 	int utcSeconds = mktime(&utcTime);
-	int diff = gpsSeconds - utcSeconds;
+	int diff = utcSeconds - gpsSeconds;
 	return diff;
 }
