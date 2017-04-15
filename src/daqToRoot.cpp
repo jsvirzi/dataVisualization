@@ -46,6 +46,7 @@ int main(int argc, char **argv) {
 	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-05-53-33";
 	wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-07-32-04";
 	wdir = "/home/jsvirzi/projects/mapping/data/07-04-2017-06-59-14";
+	wdir = "/home/jsvirzi/projects/mapping/data/11-04-2017-04-12-16";
 //	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-07-32-04";
 
     /* output file */

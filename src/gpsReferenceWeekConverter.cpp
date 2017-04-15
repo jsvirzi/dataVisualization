@@ -76,8 +76,8 @@ uint64_t secondsAtStartOfReferenceWeek(int week) {
     struct tm t;
     memset(&t, 0, sizeof(t));
     t.tm_mday = referenceWeeksToSimpleDate[index].day;
-    t.tm_mon = referenceWeeksToSimpleDate[index].month;
-    t.tm_year = referenceWeeksToSimpleDate[index].year;
+    t.tm_mon = referenceWeeksToSimpleDate[index].month - 1;
+    t.tm_year = referenceWeeksToSimpleDate[index].year - 1900;
     time_t seconds = mktime(&t);
     return seconds;
 }

@@ -140,6 +140,7 @@ int main(int argc, char **argv) {
     wdir = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26";
     wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-05-53-33";
     wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-07-32-04";
+    wdir = "/home/jsvirzi/projects/mapping/data/11-04-2017-04-12-16";
     // sfile = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26/gpsimu.root";
     sfile = wdir + "/gpsimu.root";
     lfile = wdir + "/lidar.pcap";
@@ -157,7 +158,7 @@ int main(int argc, char **argv) {
         if(lidarPacketType == pcapReader.TypeLidarDataPacket) {
             LidarDataPacket *lidarDataPacket = (LidarDataPacket *)p;
             LidarData *lidarData = pcapReader.pointCloud;
-            convertLidarPacketToLidarData(lidarDataPacket, lidarData, timeBase, -M_PI, M_PI);
+            convertLidarPacketToLidarData(lidarDataPacket, lidarData, timeBase);
             ++nDataPackets;
         } else if (lidarPacketType == pcapReader.TypeLidarPositionPacket) {
             LidarPositionPacket *lidarPositionPacket = (LidarPositionPacket *)p;
