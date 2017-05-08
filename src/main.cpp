@@ -141,9 +141,14 @@ int main(int argc, char **argv) {
     wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-05-53-33";
     wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-07-32-04";
     wdir = "/home/jsvirzi/projects/mapping/data/11-04-2017-04-12-16";
+    wdir = "/media/ssdb/projects/data/rig/stopsign";
     // sfile = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26/gpsimu.root";
     sfile = wdir + "/gpsimu.root";
     lfile = wdir + "/lidar.pcap";
+
+    sfile = wdir + "/daq.root";
+
+    bool readLidar = false;
 
     TFile fdS(sfile.c_str(), "read");
 
@@ -151,39 +156,42 @@ int main(int argc, char **argv) {
     int lidarPacketType;
     void *p;
 
-    int nDataPackets = 0, nPositionPackets = 0;
-    uint32_t previousTimestamp = 0, timestamp = 0;
-	time_t timeBase = 0;
-    while((lidarPacketType = pcapReader.readPacket(&p)) != pcapReader.LidarPacketTypes) {
-        if(lidarPacketType == pcapReader.TypeLidarDataPacket) {
-            LidarDataPacket *lidarDataPacket = (LidarDataPacket *)p;
-            LidarData *lidarData = pcapReader.pointCloud;
-            convertLidarPacketToLidarData(lidarDataPacket, lidarData, timeBase);
-            ++nDataPackets;
-        } else if (lidarPacketType == pcapReader.TypeLidarPositionPacket) {
-            LidarPositionPacket *lidarPositionPacket = (LidarPositionPacket *)p;
-            char nmeaSentence[sizeof(lidarPositionPacket->nmeaSentence) + 1];
-            snprintf(nmeaSentence, sizeof(nmeaSentence), "%s", lidarPositionPacket->nmeaSentence);
-            previousTimestamp = timestamp;
-            timestamp = lidarPositionPacket->timestamp[3];
-            timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[2];
-            timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[1];
-            timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[0];
-            ++nPositionPackets;
-            unsigned char valid = lidarPositionPacket->timestamp[4];
-			char timeStr[32], dateStr[32];
-			readFieldFromCsv(nmeaSentence, 1, timeStr, sizeof(timeStr));
-			readFieldFromCsv(nmeaSentence, 9, dateStr, sizeof(dateStr));
-			timeBase = hourTimeBaseInSeconds(dateStr, timeStr);
-            printf("NMEA=[%s]. TIME(0x%2.2x)=0x%8.8x=%d. deltaT=%d. D=%d/P=%d. DATE/TIME=[%s/%s]\n",
-				nmeaSentence, valid, timestamp, timestamp, timestamp - previousTimestamp, nDataPackets,
-				nPositionPackets, timeStr, dateStr);
+    if(readLidar) {
+        int nDataPackets = 0, nPositionPackets = 0;
+        uint32_t previousTimestamp = 0, timestamp = 0;
+        time_t timeBase = 0;
+        while((lidarPacketType = pcapReader.readPacket(&p)) != pcapReader.LidarPacketTypes) {
+            if(lidarPacketType == pcapReader.TypeLidarDataPacket) {
+                LidarDataPacket *lidarDataPacket = (LidarDataPacket *)p;
+                LidarData *lidarData = pcapReader.pointCloud;
+                convertLidarPacketToLidarData(lidarDataPacket, lidarData, timeBase);
+                ++nDataPackets;
+            } else if (lidarPacketType == pcapReader.TypeLidarPositionPacket) {
+                LidarPositionPacket *lidarPositionPacket = (LidarPositionPacket *)p;
+                char nmeaSentence[sizeof(lidarPositionPacket->nmeaSentence) + 1];
+                snprintf(nmeaSentence, sizeof(nmeaSentence), "%s", lidarPositionPacket->nmeaSentence);
+                previousTimestamp = timestamp;
+                timestamp = lidarPositionPacket->timestamp[3];
+                timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[2];
+                timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[1];
+                timestamp = (timestamp << 8) | lidarPositionPacket->timestamp[0];
+                ++nPositionPackets;
+                unsigned char valid = lidarPositionPacket->timestamp[4];
+                char timeStr[32], dateStr[32];
+                readFieldFromCsv(nmeaSentence, 1, timeStr, sizeof(timeStr));
+                readFieldFromCsv(nmeaSentence, 9, dateStr, sizeof(dateStr));
+                timeBase = hourTimeBaseInSeconds(dateStr, timeStr);
+                printf("NMEA=[%s]. TIME(0x%2.2x)=0x%8.8x=%d. deltaT=%d. D=%d/P=%d. DATE/TIME=[%s/%s]\n",
+                       nmeaSentence, valid, timestamp, timestamp, timestamp - previousTimestamp, nDataPackets,
+                       nPositionPackets, timeStr, dateStr);
+            }
         }
+
+        getchar();
     }
 
-    getchar();
-
-    double yaw, pitch, roll, time, time0;
+    uint64_t time, time0;
+    double yaw, pitch, roll;
     TTree *tree = (TTree *)fdS.Get("ins");
     TBranch *branchYaw = tree->GetBranch("yaw");
     branchYaw->SetAddress(&yaw);
@@ -191,7 +199,7 @@ int main(int argc, char **argv) {
     branchRoll->SetAddress(&roll);
     TBranch *branchPitch = tree->GetBranch("pitch");
     branchPitch->SetAddress(&pitch);
-    TBranch *branchTime = tree->GetBranch("time");
+    TBranch *branchTime = tree->GetBranch("daqTime");
     branchTime->SetAddress(&time);
     int nAcc = 0, n = tree->GetEntries(), startEntry = 16, finalEntry = n;
     for(i=startEntry;i<finalEntry;++i) {
@@ -225,11 +233,11 @@ int main(int argc, char **argv) {
         thumbnails[i] = Mat::zeros(sizeThumbnail, type);
     }
 
-    int nGraphs = 3, graphHeight = 360, graphWidth = nImages * thumbnailWidth;
+    int nGraphs = 3, graphHeight = 180, graphWidth = nImages * thumbnailWidth;
     int bigHeight = thumbnailHeight + nGraphs * graphHeight;
     Size sizeGraph(graphWidth, graphHeight);
     int bigWidth = nImages * thumbnailWidth;
-    Mat bigMat = Mat::zeros(bigHeight, bigWidth, type);
+    Mat bigMat(bigHeight, bigWidth, type);
 
     Size sizeCanvas(graphWidth, nGraphs * graphHeight);
     TCanvas canvas("canvas", "canvas", sizeCanvas.width, sizeCanvas.height);
@@ -240,7 +248,7 @@ int main(int argc, char **argv) {
     canvas.Divide(1, 3, 0.0, 0.0);
     canvas.SetBorderMode(0);
 
-    int nGraphPoints = 200;
+    int nGraphPoints = 40;
     float *timeData = new float [ nGraphPoints ];
     for(int j=0;j<nGraphPoints;++j) {
         timeData[j] = j;
@@ -248,11 +256,24 @@ int main(int argc, char **argv) {
 
     char filename[256];
 	namedWindow("main");
+    float *imuData = yawData;
+    double previousAngle = imuData[0];
 	for(i=0;i<3000;++i) {
+
+        int imuPos = i * 10;
+
 		snprintf(filename, sizeof(filename), "%s/image-%010u-%1d.jpg", wdir.c_str(), i, i % 4);
         printf("filename = [%s]\n", filename);
 		Mat mat = imread(filename);
-        resize(mat, thumbnails[imageHead], sizeThumbnail);
+        Mat smallMat;
+        resize(mat, smallMat, sizeThumbnail);
+
+        Point2f centerPoint(smallMat.cols / 2.0, smallMat.rows / 2.0);
+        double angle = 1.0 * (imuData[imuPos] - previousAngle), scale = 1.0;
+        previousAngle = imuData[imuPos];
+        Mat rotationMatrix = getRotationMatrix2D(centerPoint, angle, scale);
+        warpAffine(smallMat, thumbnails[imageHead], rotationMatrix, sizeThumbnail);
+
         Mat tiles[nImages];
         for(int j=0;j<nImages;++j) {
             tiles[j] = Mat(bigMat, Rect(j * thumbnailWidth, 0, thumbnailWidth, thumbnailHeight));
@@ -260,7 +281,6 @@ int main(int argc, char **argv) {
         }
 
         if(nGraphs > 0) {
-            int imuPos = i * 10;
             TGraph graphYaw(nGraphPoints, timeData, &yawData[imuPos]);
             TGraph graphRoll(nGraphPoints, timeData, &rollData[imuPos]);
             TGraph graphPitch(nGraphPoints, timeData, &pitchData[imuPos]);
