@@ -142,6 +142,7 @@ int main(int argc, char **argv) {
     wdir = "/home/jsvirzi/projects/mapping/data/03-04-2017-07-32-04";
     wdir = "/home/jsvirzi/projects/mapping/data/11-04-2017-04-12-16";
     wdir = "/media/ssdb/projects/data/rig/stopsign";
+	wdir = "/media/jsvirzi/a25c2ee8-daf5-4047-9cf6-1ca6cdd578e8/data/rigData/26-03-2017-05-22-26-930-stopsign";
     // sfile = "/home/jsvirzi/projects/mapping/data/26-03-2017-05-22-26/gpsimu.root";
     sfile = wdir + "/gpsimu.root";
     lfile = wdir + "/lidar.pcap";
@@ -190,32 +191,38 @@ int main(int argc, char **argv) {
         getchar();
     }
 
-    uint64_t time, time0;
-    double yaw, pitch, roll;
+	const int maxImuPoints = 100; /* this should match daqToRoot. TODO */
+	int nImuPoints;
+    uint64_t time[maxImuPoints], time0 = 0;
+    double yaw[maxImuPoints], pitch[maxImuPoints], roll[maxImuPoints];
     TTree *tree = (TTree *)fdS.Get("ins");
+	TBranch *branchImuPoints = tree->GetBranch("nImu");
+	branchImuPoints->SetAddress(&nImuPoints);
     TBranch *branchYaw = tree->GetBranch("yaw");
-    branchYaw->SetAddress(&yaw);
+    branchYaw->SetAddress(yaw);
     TBranch *branchRoll = tree->GetBranch("roll");
-    branchRoll->SetAddress(&roll);
+    branchRoll->SetAddress(roll);
     TBranch *branchPitch = tree->GetBranch("pitch");
-    branchPitch->SetAddress(&pitch);
+    branchPitch->SetAddress(pitch);
     TBranch *branchTime = tree->GetBranch("daqTime");
-    branchTime->SetAddress(&time);
+    branchTime->SetAddress(time);
     int nAcc = 0, n = tree->GetEntries(), startEntry = 16, finalEntry = n;
     for(i=startEntry;i<finalEntry;++i) {
+		branchImuPoints->GetEvent(i);
         branchYaw->GetEvent(i);
         branchRoll->GetEvent(i);
         branchPitch->GetEvent(i);
         branchTime->GetEvent(i);
-        if(fabs(yaw) > 360.0) yaw = 0.0;
-        if(fabs(roll) > 360.0) roll = 0.0;
-        if(fabs(pitch) > 360.0) pitch = 0.0;
-        yawData[nAcc] = yaw;
-        rollData[nAcc] = roll;
-        pitchData[nAcc] = pitch;
-        if(i == startEntry) time0 = time;
-        else evtTimeData[nAcc] = (time - time0);
-        ++nAcc;
+		for(int j=0;j<nImuPoints;++j,++nAcc) {
+			if(fabs(yaw[j]) > 360.0) yaw[j] = 0.0;
+			if(fabs(roll[j]) > 360.0) roll[j] = 0.0;
+			if(fabs(pitch[j]) > 360.0) pitch[j] = 0.0;
+			yawData[nAcc] = yaw[j];
+			rollData[nAcc] = roll[j];
+			pitchData[nAcc] = pitch[j];
+			if(time0 == 0) time0 = time[j];
+			evtTimeData[nAcc] = (time[j] - time0);
+		}
     }
 
 	float yawMin = 999.0, yawMax = -999.0, rollMin = 999.0, rollMax = -999.0, pitchMin = 999.0, pitchMax = -999.0;

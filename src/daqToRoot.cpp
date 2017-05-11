@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
 	wdir = "/home/jsvirzi/projects/mapping/data/07-04-2017-06-59-14";
 	wdir = "/home/jsvirzi/projects/mapping/data/11-04-2017-04-12-16";
     wdir = "/media/ssdb/projects/data/rig/stopsign";
+	wdir = "/media/jsvirzi/a25c2ee8-daf5-4047-9cf6-1ca6cdd578e8/data/rigData/26-03-2017-05-22-26-930-stopsign";
 //	wdir = "/home/jsvirzi/projects/data/rig/03-04-2017-07-32-04";
 
     /* output file */
